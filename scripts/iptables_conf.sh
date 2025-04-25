@@ -4,9 +4,9 @@ sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
 sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
 sudo iptables-save
 
-sudo cp /etc/rc.local /etc/rc.local.iptables1_saved
+sudo cp /etc/rc.local /etc/rc.local.iptables1_saved >/dev/null 2>&1
 
-sudo sed -i 's/exit 0//' /etc/rc.local
+sudo sed -i 's/exit 0//' /etc/rc.local >/dev/null 2>&1
 
 sudo tee /etc/rc.local > /dev/null << 'EOF'
 #!/bin/bash
