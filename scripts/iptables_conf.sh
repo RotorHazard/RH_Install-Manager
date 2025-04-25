@@ -8,14 +8,18 @@ sudo cp /etc/rc.local /etc/rc.local.iptables1_saved
 
 sudo sed -i 's/exit 0//' /etc/rc.local
 
-echo "
-# [Port Forwarding - RH_Install-Manager]
-sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
-sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
-sudo iptables-save
+sudo tee /etc/rc.local > /dev/null << 'EOF'
+#!/bin/bash
+
+# [Port Forwarding – RH_Install-Manager]
+iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
+iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
+iptables-save
 
 exit 0
-" | sudo tee -a /etc/rc.local
+EOF
+
+sudo chmod +x /etc/rc.local
 
 green="\033[92m"
 red="\033[91m"
