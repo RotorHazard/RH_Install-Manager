@@ -5,6 +5,9 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+6k2.421.35
+1. Readme page updated
+
 6k1.421.35
 1. Port forwarding not-working after reboot issue fixed
 
