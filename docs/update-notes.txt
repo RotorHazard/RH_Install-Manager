@@ -5,7 +5,7 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
-6k4.430.35
+6k5.430.35
 1. RotorHazard 4.3.0 (stable) release installation and update support added.
 
 6k3.421.35
