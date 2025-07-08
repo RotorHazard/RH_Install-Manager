@@ -304,7 +304,7 @@ If you want to use value given as default, just hit 'Enter'.
 
             while True:
                 serial_ports = input(
-                    "\nWhich port (serial or USB) you will use? [blank defaults to serial0]\t").strip().lower()
+                    "\nWhich port (serial or USB) you will use? [blank defaults to serial0]\t").strip()
                 if not serial_ports:
                     serial_ports = []
                     print("defaulted to: []")
