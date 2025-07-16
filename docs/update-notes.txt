@@ -5,6 +5,9 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+6k7.430.35
+1. Minor version file updates
+
 6k6.430.35
 1. Fixed bug where serial port names were converted to lower case in the config.
 

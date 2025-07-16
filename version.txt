@@ -1,11 +1,13 @@
-6k6.430.35
+6k7.430.35
 
 4.3.0-beta.3
 
 First line - version of this program - it has nothing to do with the RH version.
-First number refers to last stable RH version that can be installed using particular release.
-Second number is the API level of the newest contained nodes firmware (Arduino).
-Third number refers to the actual version of the Manager itself.
+Third line - name of the latest beta RH release.
+
+First number refers to the actual version of the RHIM itself.
+Second number refers to last stable RH version that can be installed using particular release.
+Third number is the API level of the newest contained nodes firmware (Arduino).
 
 For example version 6a.401.35 could handle installation/update of the RotorHazard server v4.0.1,
 would contain firmware with the API level 35 and the Manager release "name" would be "6a".
