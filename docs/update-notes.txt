@@ -5,8 +5,11 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+6l5.431.35
+1. New RotorHazard Arduino firmware added (as main branch firmware - API 36).
+
 6l4.431.35
-1. RotorHazard 4.4.0-beta.2 release Arduino firmware added (as beta branch firmware).
+1. RotorHazard 4.4.0-beta.2 Arduino firmware added (as beta branch firmware - API 36).
 
 6l3.431.35
 1. RotorHazard 4.4.0-beta.2 release installation and update support added.
