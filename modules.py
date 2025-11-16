@@ -20,9 +20,9 @@ def host_sys_info():
 
 
 def show_ip():
-    ethernet_ip_os = "ifconfig eth0 | grep -oP 'inet \K\S+' || sudo ifconfig eth0 | grep -oP 'inet \K\S+' || echo 'no wired connection'"
+    ethernet_ip_os = r"ifconfig eth0 | grep -oP 'inet \K\S+' || sudo ifconfig eth0 | grep -oP 'inet \K\S+' || echo 'no wired connection'"
     ethernet_ip = (subprocess.check_output(ethernet_ip_os, shell=True, text=True)).strip()
-    hotspot_ip_os = "ifconfig wlan0 | grep -oP 'inet \K\S+' || sudo ifconfig wlan0 | grep -oP 'inet \K\S+' || echo 'no wireless connection'"
+    hotspot_ip_os = r"ifconfig wlan0 | grep -oP 'inet \K\S+' || sudo ifconfig wlan0 | grep -oP 'inet \K\S+' || echo 'no wireless connection'"
     wlan_ip = (subprocess.check_output(hotspot_ip_os, shell=True, text=True)).strip()
     return ethernet_ip, wlan_ip
 
