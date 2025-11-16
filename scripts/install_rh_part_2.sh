@@ -23,7 +23,7 @@ printf "\n\n   Installing additional software - may take few minutes \n\n\n"
 cd /home/"${1}"/RotorHazard/src/server || echo "$red missing RotorHazard directory"
 pip3 install --upgrade pip
 pip3 install -r requirements.txt
-pip3 install cffi pillow==9.5.0
+pip3 install cffi pillow
 sudo chmod 777 -R /home/"${1}"/RotorHazard/src/server
 cd /home/"${1}" || exit
 

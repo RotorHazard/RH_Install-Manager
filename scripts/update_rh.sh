@@ -56,7 +56,7 @@ time_warning_show
 cd /home/"${1}"/RotorHazard/src/server || echo "$red missing RotorHazard directory $endc"
 pip3 install --upgrade pip
 pip3 install --upgrade --no-cache-dir -r requirements.txt
-pip3 install cffi pillow==9.5.0
+pip3 install cffi pillow
 
 cd /home/"${1}"/RH_Install-Manager/scripts/ || exit
 sudo ./python3_transition.sh "${1}"
