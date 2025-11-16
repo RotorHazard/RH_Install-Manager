@@ -100,8 +100,8 @@ You may also read [update notes](/docs/update-notes.txt) - new features are pres
     Next:
     sudo apt update
     sudo apt upgrade -y
-    sudo ntpd -qg (in case of errors with date related system updates)
-    sudo apt install wget zip unzip curl -y
+    sudo apt install wget zip unzip curl chrony -y
+    sudo chronyc -a makestep (in case of date related errors)
     chmod +x ~/RH_Install-Manager/rhim.sh
 
 <br/>

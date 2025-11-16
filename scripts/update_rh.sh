@@ -13,7 +13,7 @@ time_warning_show() {
 }
 
 sudo apt-get update && sudo apt-get --with-new-pkgs upgrade -y
-sudo apt-get install libjpeg-dev libopenjp2-7-dev ntp htop iptables -y python*-venv
+sudo apt-get install libjpeg-dev libopenjp2-7-dev chrony htop iptables -y python*-venv
 sudo apt autoremove -y
 sudo chmod -R 777 "/home/${1}/RotorHazard" # to ensure smooth operation if files in RH directory were edited etc. and permissions changed
 upgradeDate="$(date +%Y%m%d%H%M)"
