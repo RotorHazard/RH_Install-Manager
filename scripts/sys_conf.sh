@@ -18,10 +18,10 @@ chipset_check() {
 }
 
 boot_directory_check() {
-  if [ "$(~/RH_Install-Manager/scripts/os_version_check.sh)" == "12" ]; then
-    echo "/boot/firmware"
-  else
+  if [ "$(~/RH_Install-Manager/scripts/os_version_check.sh)" == "11" ]; then
     echo "/boot"
+  else
+    echo "/boot/firmware"
   fi
 }
 
