@@ -22,8 +22,8 @@ fi
 printf "\n\n   Installing additional software - may take few minutes \n\n\n"
 cd /home/"${1}"/RotorHazard/src/server || echo "$red missing RotorHazard directory"
 pip3 install --upgrade pip
-pip3 install -r requirements.txt
-pip3 install cffi pillow==9.5.0
+pip3 install --upgrade --no-cache-dir -r requirements.txt
+pip3 install cffi pillow
 sudo chmod 777 -R /home/"${1}"/RotorHazard/src/server
 cd /home/"${1}" || exit
 
@@ -36,7 +36,7 @@ java_installation() {
   if [[ $(~/RH_Install-Manager/scripts/pi_model_check.sh) == "pi_zero" ]]; then
     sudo apt-get install openjdk-8-jdk-headless -y
   else
-    sudo apt-get install openjdk-17-jdk-headless -y
+    sudo apt-get install default-jdk-headless -y
   fi
 }
 
