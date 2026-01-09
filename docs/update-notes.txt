@@ -5,6 +5,9 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+6m2.431.35
+1. RotorHazard 4.4.0-beta.3 release installation and update support added.
+
 6m1.431.35
 1. Fixed pillow version and jdk version redundant assignment
 2. Boot config file logic ready for Trixie OS version
