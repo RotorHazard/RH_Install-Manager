@@ -5,6 +5,9 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+6n2.440.36
+1. RotorHazard Arduino firmware with API level 36 added as stable branch firmware.
+
 6n1.440.35
 1. RotorHazard 4.4.0 (stable) release installation and update support added.
 
