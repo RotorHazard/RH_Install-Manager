@@ -1,7 +1,10 @@
 #!/bin/bash
 
 boot_directory_check() {
-  if [ "$(~/RH_Install-Manager/scripts/os_version_check.sh)" == "12" ]; then
+
+  os_version="$(~/RH_Install-Manager/scripts/os_version_check.sh)"
+  if [ "$os_version" == "12" ] || [ "$os_version" == "13" ]; then
+
     echo "/boot/firmware"
   else
     echo "/boot"
