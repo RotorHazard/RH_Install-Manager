@@ -1,6 +1,6 @@
-6n3.440.36
+6n4.440.36
 
-4.4.0-beta.3
+4.5.0-beta.1
 
 First line - version of this program - it has nothing to do with the RH version.
 Third line - name of the latest beta RH release.
