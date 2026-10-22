@@ -37,10 +37,17 @@ subprocess responses for effective systemd properties and interpreter probes.
 It covers standard and equivalent drop-in layouts, Python version limits,
 venv/pip identity and failures, missing services, systemd errors/timeouts,
 environment overrides, fresh part 1, resumed part 2, and unknown-target consent.
-The literal systemd fixture is synthetic, not captured from a Linux host. It is
-independent of the guard's property constants. Empty deny-list formatting follows
-the upstream [systemctl v247 property printer](https://github.com/systemd/systemd/blob/v247/src/systemctl/systemctl-show.c#L954-L994).
+The original literal systemd fixture is synthetic, not captured from a Linux
+host. It is independent of the guard's property constants. Empty deny-list
+formatting follows the upstream [systemctl v247 property printer](https://github.com/systemd/systemd/blob/v247/src/systemctl/systemctl-show.c#L954-L994).
 Tests also cover omitted optional properties and rejection of missing core ones.
+`systemctl_show_systemd252_running.txt` was captured on Debian 12 amd64 with
+systemd 252.39-1~deb12u2 on 2026-10-23, using the guard's exact property query
+as user `pi`. Its stdout is unchanged. The service ran a dummy sleep loop with
+the standard RHIM unit layout and a real Python 3.11.2 system-site-packages
+venv. It was not RotorHazard. The regression test feeds this captured output
+through the real guard with the interpreter probe mocked, covering live
+ExecStart metadata, empty deny-lists and omitted optional properties.
 Coordinator functions are loaded with the same AST helper. They run the real
 guard against those fixtures with external actions mocked, checking denial
 before shell commands/markers/success, final stable selection, NH quick stages,

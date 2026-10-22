@@ -122,3 +122,13 @@ a stopped service. Review its error and recovery state before retrying.
 Local mocked tests and shell syntax checks do not prove behavior on a real
 systemd host, Linux venv or Raspberry Pi. Those need fresh-install, resumed
 part-2 and existing-install update trials on designated Linux/Pi test systems.
+
+On 2026-10-23, the read-only preflight was exercised as `pi` on Debian 12
+amd64 with Python 3.11.2 and systemd 252.39. Fresh part 1 selected the system
+base without creating files. A manually created system-site-packages venv and
+a running dummy service passed targets `v4.4.0` and `v4.5.0` across all stages.
+System Python ExecStart, environment overrides, missing venv and broken venv
+were refused without changing the measured service state or fixture files.
+The captured systemctl output is retained in the test fixtures. This verifies
+the guard with a real venv and service, not installation scripts, real
+RotorHazard startup, dependency installation or Raspberry Pi hardware.

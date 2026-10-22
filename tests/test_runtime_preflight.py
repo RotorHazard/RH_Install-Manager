@@ -95,6 +95,12 @@ class RuntimeFixture(unittest.TestCase):
 
 
 class RuntimeTests(RuntimeFixture):
+    def test_captured_systemd252_running_service(self):
+        # Debian 12 systemd 252.39, real running dummy service; no property rewriting.
+        fixture = (ROOT / "tests/fixtures/systemctl_show_systemd252_running.txt").read_text()
+        self.properties = dict(line.split("=", 1) for line in fixture.splitlines())
+        self.assertEqual(self.check()["python"], PYTHON)
+
     def test_standard_service_preserves_venv_executable(self):
         result = self.check()
         self.assertEqual(result["python"], PYTHON)
