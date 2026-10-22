@@ -222,9 +222,12 @@ def serial_menu(config):
 
     def uart_enabling():  # UART enabling prompt is also being shown when entering nodes flash menu for the first time
         # TODO Make this repeatable without adding multiple copies at the end of config.txt.
-        os.system("./scripts/sys_conf.sh uart")
+        if os.system("./scripts/sys_conf.sh uart") != 0:
+            print("UART configuration failed. Review the error before retrying.")
+            return False
         rhim_status.uart_support_added = True
-        write_rhim_sys_markers(rhim_status, config.user)
+        if not write_rhim_sys_markers(rhim_status, config.user):
+            return False
         print("""
 
         Serial port enabled successfully.
@@ -279,7 +282,8 @@ def serial_menu(config):
             break
         elif selection == 'd':
             rhim_status.uart_support_added = True
-            write_rhim_sys_markers(rhim_status, config.user)
+            if not write_rhim_sys_markers(rhim_status, config.user):
+                return False
             old_flash_gpio(config) if config.old_hw_mod else flashing_menu(config)
             break
         elif selection == 'a':
@@ -293,7 +297,8 @@ def aliases_menu(config):
         """load rhim status, update aliases then write rhim_status"""
         os.system("cat ./resources/aliases.txt | tee -a ~/.bashrc")
         rhim_status.aliases_implemented = True
-        write_rhim_sys_markers(rhim_status, config.user)
+        if not write_rhim_sys_markers(rhim_status, config.user):
+            return False
         print("\n\n\t\t    Aliases added successfully")
         sleep(2)
         return

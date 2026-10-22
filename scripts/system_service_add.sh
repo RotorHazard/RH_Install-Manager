@@ -12,4 +12,4 @@ ExecStart=/home/${1}/.venv/bin/python3 server.py
 [Install]
 WantedBy=multi-user.target
 
-" | sudo tee -a /lib/systemd/system/rotorhazard.service
+" | sudo tee /lib/systemd/system/rotorhazard.service

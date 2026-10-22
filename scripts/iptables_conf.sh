@@ -1,14 +1,14 @@
 #!/bin/bash
 
-sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
-sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
-sudo iptables-save
+sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000 || { echo "Port 80 forwarding failed" >&2; exit 1; }
+sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80 || { echo "Port 8080 forwarding failed" >&2; exit 1; }
+sudo iptables-save || { echo "Reading firewall rules failed" >&2; exit 1; }
 
-sudo cp /etc/rc.local /etc/rc.local.iptables1_saved >/dev/null 2>&1
+if [ -e /etc/rc.local ] || [ -L /etc/rc.local ]; then
+  sudo cp /etc/rc.local /etc/rc.local.iptables1_saved || { echo "rc.local backup failed" >&2; exit 1; }
+fi
 
-sudo sed -i 's/exit 0//' /etc/rc.local >/dev/null 2>&1
-
-sudo tee /etc/rc.local > /dev/null << 'EOF'
+sudo tee /etc/rc.local > /dev/null << 'EOF' || { echo "Port forwarding configuration write failed" >&2; exit 1; }
 #!/bin/bash
 
 # [Port Forwarding – RH_Install-Manager]
@@ -19,7 +19,7 @@ iptables-save
 exit 0
 EOF
 
-sudo chmod +x /etc/rc.local
+sudo chmod +x /etc/rc.local || { echo "rc.local permissions update failed" >&2; exit 1; }
 
 green="\033[92m"
 red="\033[91m"

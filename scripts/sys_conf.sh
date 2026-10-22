@@ -44,11 +44,7 @@ ssh_error() {
   please: disable end re-enable SSH interface
   than reboot
 
-  Hit 'Enter' to continue
-
   "
-  read -r _
-  sleep 2
 }
 
 spi_enabling() {
@@ -64,7 +60,9 @@ spi_enabling() {
 dtparam=spi=on
 " | sudo tee -a "${boot_directory}"/config.txt || return 1
 
-  sudo sed -i 's/^blacklist spi-bcm2708/#blacklist spi-bcm2708/' /etc/modprobe.d/raspi-blacklist.conf >>/dev/null 2>&1
+  if [ -e /etc/modprobe.d/raspi-blacklist.conf ]; then
+    sudo sed -i 's/^blacklist spi-bcm2708/#blacklist spi-bcm2708/' /etc/modprobe.d/raspi-blacklist.conf || return 1
+  fi
 
   printf "\n\t$green -- SPI ENABLED -- $endc\n\n\n"
   sleep 3
@@ -79,12 +77,7 @@ spi_error() {
   please: disable end re-enable SPI interface
   than reboot
 
-  Hit 'Enter' to continue
-
-
   "
-  read -r _
-  sleep 2
 }
 
 i2c_enabling() {
@@ -126,28 +119,35 @@ i2c_error() {
   please: disable end re-enable I2C interface
   than reboot
 
-  Hit 'Enter' to continue
-
   "
-  read -r _
-  sleep 2
 }
 
 uart_enabling() {
 
   boot_directory=$(boot_directory_check)
 
-  sudo cp "${boot_directory}/config.txt" "${boot_directory}/config.txt.dist" || echo
-  sudo cp "${boot_directory}/cmdline.txt" "${boot_directory}/cmdline.txt.dist" || echo
+  if [ ! -e "${boot_directory}/config.txt.dist" ]; then
+    sudo cp "${boot_directory}/config.txt" "${boot_directory}/config.txt.dist" || return 1
+  fi
+  if [ ! -e "${boot_directory}/cmdline.txt.dist" ]; then
+    sudo cp "${boot_directory}/cmdline.txt" "${boot_directory}/cmdline.txt.dist" || return 1
+  fi
 
-  sudo raspi-config nonint do_serial_hw 0 || echo "older Raspberry Pi OS found - adjusting"
+  sudo raspi-config nonint do_serial_hw 0
+  serial_status=$?
+  if [ "$serial_status" -eq 127 ]; then
+    echo "Older raspi-config found - using combined UART configuration"
+    sudo raspi-config nonint do_serial 2 || return 1
+  elif [ "$serial_status" -ne 0 ]; then
+    return 1
+  else
+    sudo raspi-config nonint do_serial_cons 1 || return 1
+  fi
 
-  sudo sed -i 's/console=serial0,115200//g' "${boot_directory}/cmdline.txt" || echo
+  sudo sed -i 's/console=serial0,115200//g' "${boot_directory}/cmdline.txt" || return 1
   echo "
   console serial output disabled - requires REBOOT
   "
-  sudo raspi-config nonint do_serial_cons 1 || echo "older Raspberry Pi OS found - adjusting"
-
   echo "
 ### UART enabled - RH_Install-Manager ###
 
@@ -176,27 +176,23 @@ uart_error() {
   please: disable end re-enable UART interface
   than reboot
 
-  Hit 'Enter' to continue
-
   "
-  read -r _
-  sleep 2
 }
 
 if [ "${1}" = "ssh" ]; then
-  ssh_enabling || ssh_error
+  ssh_enabling || { ssh_error; exit 1; }
 fi
 
 if [ "${1}" = "spi" ]; then
-  spi_enabling || spi_error
+  spi_enabling || { spi_error; exit 1; }
 fi
 
 if [ "${1}" = "i2c" ]; then
-  i2c_enabling || i2c_error
+  i2c_enabling || { i2c_error; exit 1; }
 fi
 
 if [ "${1}" = "uart" ]; then
-  uart_enabling || uart_error
+  uart_enabling || { uart_error; exit 1; }
 fi
 
 reboot_message() {
@@ -209,9 +205,9 @@ reboot_message() {
 
 if [ "${1}" = "all" ]; then
   chipset_check || echo
-  ssh_enabling || ssh_error
-  spi_enabling || spi_error
-  i2c_enabling || i2c_error
-  uart_enabling || uart_error
+  ssh_enabling || { ssh_error; exit 1; }
+  spi_enabling || { spi_error; exit 1; }
+  i2c_enabling || { i2c_error; exit 1; }
+  uart_enabling || { uart_error; exit 1; }
   echo
 fi

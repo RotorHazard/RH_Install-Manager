@@ -1,10 +1,12 @@
 import json
 import os
 import platform
+import signal
 import socket
 import subprocess
 import sys
 import time
+import tempfile
 import pwd
 from pathlib import Path
 from shutil import copyfile
@@ -180,7 +182,26 @@ def load_rhim_sys_markers(user):
 
 def write_rhim_sys_markers(rhim_config, user):
     rhim_config_file = f'/home/{user}/.rhim_markers/rhim_config.json'
-    write_json(rhim_config, rhim_config_file)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=os.path.dirname(rhim_config_file),
+                                         delete=False) as output:
+            temporary = output.name
+            json.dump(vars(rhim_config), output, indent=4)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, rhim_config_file)
+    except (OSError, TypeError, ValueError) as error:
+        print("Could not save installation progress to {}: {}. Retry after fixing storage access.".format(
+            rhim_config_file, error))
+        return False
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            try:
+                os.unlink(temporary)
+            except OSError as error:
+                print("Could not remove temporary progress file {}: {}".format(temporary, error))
+    return True
 
 
 def get_rhim_version(checking_from_updater):
@@ -198,18 +219,29 @@ def get_rhim_version(checking_from_updater):
 
 
 def server_start():
-    server_stat = os.popen('service rotorhazard status').read()
-    if 'running' not in server_stat:
+    if os.system('systemctl is-active --quiet rotorhazard') != 0:
         clear_the_screen()
-        os.system("./scripts/server_start.sh")
     else:
         clear_the_screen()
         print("Server is already running as a service")
-        selection = input("Do you want to stop it and than start the server again? [y/n] ")
+        try:
+            selection = input("Do you want to stop it and than start the server again? [y/n] ")
+        except EOFError:
+            return True
         if selection == 'y':
-            os.system("sudo systemctl stop rotorhazard")
+            if os.system("sudo systemctl stop rotorhazard") != 0:
+                print("Could not stop RotorHazard. Check the service before retrying.")
+                return False
             print("Server service stopped. Please wait.\n")
-            os.system("./scripts/server_start.sh")
+        else:
+            return True
+    status = os.system("./scripts/server_start.sh")
+    interrupted = (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 130) or (
+        os.WIFSIGNALED(status) and os.WTERMSIG(status) == signal.SIGINT)
+    if status != 0 and not interrupted:
+        print("RotorHazard did not exit successfully. Review the server error before retrying.")
+        return False
+    return True
 
 
 def rhim_config_check():

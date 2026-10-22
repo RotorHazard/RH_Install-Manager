@@ -134,14 +134,22 @@ def end_update(config, server_configured_flag, server_installed_flag):
                 o - Clear old RotorHazard installations{Bcolors.YELLOW}
 
                 e - Exit now{Bcolors.ENDC}""")
-        selection = input()
+        selection = completion_input()
         if selection == 'r':
-            os.system("sudo reboot")
+            if os.system("sudo reboot") != 0:
+                show_runtime_error("Reboot failed. Reboot the host manually before using the timer.")
+                return False
         elif selection == 's':
             os.chdir(f"/home/{config.user}/RH_Install-Manager")
-            server_start()
+            if not server_configured_flag:
+                print("RotorHazard is installed. Configuration is pending; configure it before starting.")
+                continue
+            if not server_start():
+                return False
         elif selection == 'o':
-            os.system("rm -rf ~/RotorHazard_*")
+            if os.system("rm -rf ~/RotorHazard_*") != 0:
+                show_runtime_error("Old RotorHazard installation cleanup failed. Check the remaining directories.")
+                return False
             if old_installations_were_found:
                 print("\n\t\t -- old RH installations cleaned --")
             else:
@@ -149,9 +157,15 @@ def end_update(config, server_configured_flag, server_installed_flag):
             sleep(2)
             clear_the_screen()
         elif selection == 'c':
-            conf_rh()
+            try:
+                if conf_rh() is False:
+                    return False
+            except EOFError:
+                print("RotorHazard is installed. Configuration is pending.")
+                return True
+            server_configured_flag = check_rotorhazard_config_status(config)[1]
         elif selection == 'e':
-            return
+            return True
 
 
 def end_normal_installation():
@@ -164,35 +178,48 @@ def end_normal_installation():
 
                 e - Exit now""")
 
-        selection = input()
+        selection = completion_input()
         if selection == 'r':
-            os.system("sudo reboot")
+            if os.system("sudo reboot") != 0:
+                show_runtime_error("Reboot failed. Reboot the host manually before using the timer.")
+                return False
         elif selection == 'c':
-            conf_rh()
+            try:
+                if conf_rh() is False:
+                    return False
+            except EOFError:
+                print("RotorHazard is installed. Configuration is pending.")
             break
         elif selection == 'e':
-            return
+            return True
+    return True
 
 
 def end_quick_installation(config):
     rhim_prompt = (f"""{Bcolors.GREEN}\n
         If you want to adjust any additional features like LEDs etc.
         please open Install-Manager by typing '{Bcolors.ENDC}rhim{Bcolors.GREEN}'. {Bcolors.ENDC}\n\n""")
-    os.system(f"cp /home/{config.user}/RH_Install-Manager/NuclearHazard/nh-rh-config.json "
-              f"/home/{config.user}/RotorHazard/src/server/config.json")
-    os.system(f"cp ~/RH_Install-Manager/NuclearHazard/nh-updater-config.json ~/RH_Install-Manager/updater-config.json")
+    if os.system(f"cp /home/{config.user}/RH_Install-Manager/NuclearHazard/nh-rh-config.json "
+                 f"/home/{config.user}/RotorHazard/src/server/config.json") != 0:
+        show_runtime_error("Could not apply NuclearHazard server configuration. Retry configuration before starting.")
+        return False
+    if os.system("cp ~/RH_Install-Manager/NuclearHazard/nh-updater-config.json ~/RH_Install-Manager/updater-config.json") != 0:
+        show_runtime_error("Could not apply NuclearHazard installer configuration. Retry configuration.")
+        return False
     print("\t\tDefault NuclearHazard configuration applied.\n\n")
     sleep(2)
-    selection = input(f"""{Bcolors.GREEN}
+    selection = completion_input(f"""{Bcolors.GREEN}
         Do you want to activate automatic NuclearHazard Wi-Fi? [y/N]
         You can do it later by typing '{Bcolors.ENDC}./nh-install.sh wifi{Bcolors.GREEN}'
         in the directory {Bcolors.ENDC}~/RH_Install-Manager/NuclearHazard\n\n\t""")
     if selection == 'y':
-        os.system("sh ~/RH_Install-Manager/NuclearHazard/nh-wifi.sh")
+        if os.system("sh ~/RH_Install-Manager/NuclearHazard/nh-wifi.sh") != 0:
+            show_runtime_error("NuclearHazard Wi-Fi configuration failed. Review the error before retrying.")
+            return False
         print(rhim_prompt)
     else:
         print(rhim_prompt)
-        return
+    return True
 
 
 def end_of_part_1():
@@ -203,11 +230,20 @@ def end_of_part_1():
 
                e - Exit now""")
 
-        selection = input()
+        selection = completion_input()
         if selection == 'r':
-            os.system("sudo reboot")
+            if os.system("sudo reboot") != 0:
+                show_runtime_error("Reboot failed. Reboot the host manually before continuing with part 2.")
+                return False
         elif selection == 'e':
-            sys.exit()
+            return
+
+
+def completion_input(prompt=""):
+    try:
+        return input(prompt)
+    except EOFError:
+        return 'e'
 
 
 def show_runtime_error(message):
@@ -310,7 +346,7 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             You can configure your RotorHazard installation now. 
             After doing that, please reboot the timer. 
             Some features (like UART) require this to work properly. 
-            RotorHazard service will be started automatically.
+            RotorHazard is installed; configuration is pending.
             You can also launch Install-Manager (type '{endc_no_s}rhim{green_no_s}')
             and check available options - after rebooting.{endc}
                         """.format(thumbs="👍👍👍  ", bold=Bcolors.BOLD_S, green_no_s=Bcolors.GREEN,
@@ -344,14 +380,14 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             show_runtime_error("Installation not started: could not stop RotorHazard. Check the service and retry.")
             return False
         show_runtime_result(runtime)
-        if restart:
-            rhim_config.second_part_of_install = False
-            rhim_config.first_part_of_install = False
-            rhim_config.sys_config_done = False
         if not first_part_of_installation_done_flag:
             if quick_install == 1:
-                os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh shutdown_pin 19 2500")
-                os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh led")
+                if os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh shutdown_pin 19 2500") != 0:
+                    show_runtime_error("Shutdown pin configuration failed. Review the error before retrying.")
+                    return False
+                if os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh led") != 0:
+                    show_runtime_error("LED configuration failed. Review the error before retrying.")
+                    return False
             print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
             sleep(1)
             clear_the_screen()
@@ -359,24 +395,33 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
             if conf_allowed:
                 if not config.debug_mode:
-                    os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh all")
+                    status = os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh all")
                 else:
-                    os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh ssh")
+                    status = os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh ssh")
                     print("\n\nsimulation mode - SPI, I2C and UART won't be configured\n\n\n")
                     sleep(2)
-            rhim_config.uart_support_added, rhim_config.first_part_of_install = True, True
+                if status != 0:
+                    show_runtime_error("Host configuration failed. No completion was recorded. Review the error before retrying.")
+                    return False
             # UART enabling added here so user won't have to reboot Pi again after doing it in Features Menu
             if not run_runtime_script(config.user, target, git_flag, "part1", runtime):
                 return False
+            rhim_config.first_part_of_install = True
+            rhim_config.second_part_of_install = False
+            if conf_allowed and not config.debug_mode:
+                rhim_config.uart_support_added = True
+                rhim_config.sys_config_done = True
             rhim_config.fresh_install_pending = runtime["fresh_install"]
-            write_rhim_sys_markers(rhim_config, config.user)
-            os.system(
-                f"""echo "cat /home/{config.user}/RH_Install-Manager/resources/shell_hello_1.txt" >> ~/.bashrc 2>/dev/null""") if not quick_install else None
-            input("\n\n\npress Enter to continue")
+            if not write_rhim_sys_markers(rhim_config, config.user):
+                return False
+            if not quick_install and os.system(
+                    f"""echo "cat /home/{config.user}/RH_Install-Manager/resources/shell_hello_1.txt" >> ~/.bashrc""") != 0:
+                show_runtime_error("Installation stage completed, but the shell greeting could not be saved. Continue with part 2 after reboot.")
+                return False
+            completion_input("\n\n\npress Enter to continue")
             clear_the_screen()
             print(first_part_completed_long) if not quick_install else print(first_part_completed_short)
-            end_of_part_1()
-            return True
+            return end_of_part_1() is not False
         else:
             print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
             sleep(2)
@@ -386,15 +431,19 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
             if not run_runtime_script(config.user, target, git_flag, "part2", runtime):
                 return False
-            rhim_config.second_part_of_install, rhim_config.sys_config_done = True, True
+            rhim_config.second_part_of_install = True
             rhim_config.fresh_install_pending = False
-            write_rhim_sys_markers(rhim_config, config.user)
-            input("\n\n\npress Enter to continue")
+            if not write_rhim_sys_markers(rhim_config, config.user):
+                return False
+            completion_input("\n\n\npress Enter to continue")
             clear_the_screen()
-            print(installation_completed_long) if not quick_install else print(installation_completed_short)
-            os.system("sudo chmod 777 -R ~/RotorHazard")
-            end_normal_installation() if not quick_install else end_quick_installation(config)
-            return True
+            if quick_install:
+                if not end_quick_installation(config):
+                    return False
+                print(installation_completed_short)
+                return True
+            print(installation_completed_long)
+            return end_normal_installation()
 
 
 def update(config, git_flag):
@@ -482,11 +531,9 @@ def update(config, git_flag):
             print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
             if not run_runtime_script(config.user, preferred_rh_version, git_flag, "update", runtime):
                 return False
-            config_flag, config_soft = check_rotorhazard_config_status(config)
+            config_soft, config_flag = check_rotorhazard_config_status(config)
             server_installed_flag, server_version_name, _ = get_rotorhazard_server_version(config)
-            os.system("sudo chmod -R 777 ~/RotorHazard")
-            end_update(config, config_flag, server_installed_flag)
-            return True
+            return end_update(config, config_flag, server_installed_flag)
 
 
 def origin_change(config):
@@ -648,7 +695,7 @@ def main_window(config):
                 sleep(2)
         elif selection == 'i' or selection == 'igit':
             # rh_found_flag = os.path.exists(f"/home/{config.user}/RotorHazard")
-            if sys_configured_flag:
+            if sys_configured_flag and not (rhim_config.first_part_of_install and not rhim_config.second_part_of_install):
                 system_already_configured_prompt()
                 selection = input()
                 if selection == 'i':

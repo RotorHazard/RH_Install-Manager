@@ -395,12 +395,20 @@ If you want to use value given as default, just hit 'Enter'.
             else:
                 print("\nPlease enter a valid selection")
         if selection[0] == 'y':
-            write_json(rh_config, f"{home_dir}/RotorHazard/src/server/config.json")
+            try:
+                write_json(rh_config, f"{home_dir}/RotorHazard/src/server/config.json")
+            except OSError as error:
+                print("Could not save RotorHazard configuration: {}".format(error))
+                return -1
             print(f"\n{Bcolors.UNDERLINE}Configuration saved{Bcolors.ENDC}\n")
-            os.system(
+            if os.system(
                 f"{home_dir}/RH_Install-Manager/scripts/additional_sys_conf.sh shutdown_pin {rh_config['GENERAL']['SHUTDOWN_BUTTON_GPIOPIN']} "
-                f"{rh_config['GENERAL']['SHUTDOWN_BUTTON_DELAYMS']}")
-            os.system(f"{home_dir}/RH_Install-Manager/scripts/additional_sys_conf.sh led ")
+                    f"{rh_config['GENERAL']['SHUTDOWN_BUTTON_DELAYMS']}") != 0:
+                print("Shutdown pin configuration failed. Review the error before retrying configuration.")
+                return -1
+            if os.system(f"{home_dir}/RH_Install-Manager/scripts/additional_sys_conf.sh led ") != 0:
+                print("LED configuration failed. Review the error before retrying configuration.")
+                return -1
             print(f"\nreboot maybe required\n")
             sleep(5)
             conf_now_flag = 0
@@ -424,6 +432,9 @@ def conf_rh():
     config_now = 1
     while config_now:
         config_now = do_config()
+        if config_now == -1:
+            return False
+    return True
 
 
 def main():

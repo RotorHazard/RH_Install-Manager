@@ -61,3 +61,27 @@ propagation still require execution in a designated Linux test environment.
 No systemctl, installer, apt, pip installation or hardware command is executed
 by these unit tests. Shell checks only parse scripts. The remaining real Linux
 and Pi checks are described in `docs/runtime-checks.md`.
+
+## Operation status and progress coverage
+
+`test_operation_status.py` loads production functions with the same AST helper.
+Progress-file tests use temporary files and real JSON serialization, flush,
+replacement and cleanup operations. Injected serialization, storage and rename
+failures must leave the previous valid progress file intact; a later retry must
+be able to save progress.
+
+Other cases replace external actions to check failure propagation, completion
+menus at EOF, pending configuration, failed server starts and UART setup.
+Expected Ctrl+C termination of a foreground server is accepted; other failures
+still propagate.
+Coordinator tests also check that failed host configuration or installation
+does not record completion, and that a failed fresh part 2 retains its retry
+marker. These checks do not execute the shell commands they replace. Real
+package, service and shell failure trials still require the designated Linux
+test environment.
+
+`test_uart_configuration.py` executes only the UART function extracted from
+`sys_conf.sh`. Its shell replacements limit file operations to temporary boot
+files and simulate `raspi-config` responses. It checks modern calls, the legacy
+combined call when a function is unavailable, and failures without a success
+message. It does not run the installer or touch actual boot settings.

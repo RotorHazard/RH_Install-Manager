@@ -358,7 +358,10 @@ class CoordinatorTests(RuntimeFixture):
                                        sys_config_done=marker)
         self.effects = Mock()
         self.effects.system.return_value = 0
-        self.effects.markers.side_effect = lambda markers, user: self.marker_data.update(vars(markers))
+        self.effects.markers.side_effect = lambda markers, user: self.marker_data.update(vars(markers)) or True
+        self.effects.end2.return_value = True
+        self.effects.end_quick.return_value = True
+        self.effects.end_update.return_value = True
         self.colors = SimpleNamespace(**dict.fromkeys(
             ("GREEN", "RED", "YELLOW", "ENDC", "BOLD", "BOLD_S", "GREEN_S", "ENDC_S", "UNDERLINE"), ""))
         namespace = dict(os=SimpleNamespace(system=self.effects.system, path=SimpleNamespace(exists=lambda p: self.existing)),
@@ -370,13 +373,14 @@ class CoordinatorTests(RuntimeFixture):
                          rh_update_check=lambda config: stable_offer,
                          end_of_part_1=self.effects.end1, end_normal_installation=self.effects.end2,
                          end_quick_installation=self.effects.end_quick, end_update=self.effects.end_update,
-                         check_rotorhazard_config_status=lambda config: (True, ""),
+                         check_rotorhazard_config_status=lambda config: ("", True),
                          get_rotorhazard_server_version=lambda config: (True, "4.4.0", False))
         namespace["show_runtime_error"] = load_function("rpi_update.py", "show_runtime_error", input=namespace["input"])
         namespace["run_runtime_script"] = load_function("rpi_update.py", "run_runtime_script",
                                                         os=namespace["os"], quote=shlex.quote,
                                                         show_runtime_error=namespace["show_runtime_error"])
         namespace["show_runtime_result"] = load_function("rpi_update.py", "show_runtime_result")
+        namespace["completion_input"] = load_function("rpi_update.py", "completion_input", input=namespace["input"])
         self.inputs = namespace["input"]
         return load_function("rpi_update.py", name, **namespace)
 
@@ -510,6 +514,60 @@ class CoordinatorTests(RuntimeFixture):
         self.assertTrue(self.markers.first_part_of_install)
         self.assertTrue(self.markers.second_part_of_install)
         self.assert_denied()
+
+    def test_failed_host_configuration_does_not_run_install_or_record_uart(self):
+        install = self.coordinator("installation")
+        self.effects.system.side_effect = lambda cmd: 1 if "sys_conf.sh" in cmd else 0
+        self.assertFalse(install(True, self.config, ""))
+        self.effects.markers.assert_not_called()
+        self.effects.end1.assert_not_called()
+        self.assertFalse(self.markers.first_part_of_install)
+        self.assertFalse(hasattr(self.markers, "uart_support_added"))
+        self.assertFalse(any("install_rh_part" in call.args[0] for call in self.effects.system.call_args_list))
+
+    def test_restart_script_failure_preserves_completed_state(self):
+        install = self.coordinator("installation", marker=True)
+        self.effects.system.side_effect = lambda cmd: 1 if "install_rh_part_1" in cmd else 0
+        self.assertFalse(install(True, self.config, "", restart=True))
+        self.assertTrue(self.markers.first_part_of_install)
+        self.assertTrue(self.markers.second_part_of_install)
+        self.assertTrue(self.markers.sys_config_done)
+        self.effects.markers.assert_not_called()
+
+    def test_no_uart_claim_when_system_configuration_is_skipped_or_debug(self):
+        for allowed, debug in ((False, False), (True, True)):
+            with self.subTest(allowed=allowed, debug=debug):
+                install = self.coordinator("installation")
+                self.config.debug_mode = debug
+                self.assertTrue(install(allowed, self.config, ""))
+                self.assertFalse(hasattr(self.markers, "uart_support_added"))
+                self.assertFalse(self.markers.sys_config_done)
+
+    def test_progress_write_failure_has_no_completion_menu(self):
+        for stage in (1, 2):
+            with self.subTest(stage=stage):
+                install = self.coordinator("installation", marker=(stage == 2))
+                self.effects.markers.side_effect = None
+                self.effects.markers.return_value = False
+                self.assertFalse(install(False, self.config, "", stage))
+                self.effects.end1.assert_not_called()
+                self.effects.end_quick.assert_not_called()
+
+    def test_successful_stages_accept_eof_and_return_actual_completion_status(self):
+        for stage in (1, 2):
+            install = self.coordinator("installation", marker=(stage == 2))
+            self.inputs.side_effect = EOFError()
+            self.assertTrue(install(False, self.config, "", stage))
+        update = self.coordinator("update")
+        self.effects.end_update.return_value = False
+        self.assertFalse(update(self.config, ""))
+        self.effects.end_update.assert_called_once_with(self.config, True, True)
+
+    def test_quick_configuration_failure_is_not_reported_as_completed(self):
+        install = self.coordinator("installation", marker=True)
+        self.effects.end_quick.return_value = False
+        self.assertFalse(install(False, self.config, "", 2))
+        self.assertNotIn("Installation completed", self.output.getvalue())
 
 
 class SyntaxTests(unittest.TestCase):

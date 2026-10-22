@@ -15,8 +15,8 @@ if [ "$1" == "shutdown_pin" ]; then
 
   boot_directory=$(boot_directory_check)
 
-  sudo sed -i '/GPIO pin/d' "${boot_directory}"/config.txt
-  sudo sed -i '/gpio-shutdown,gpio_pin/d' "${boot_directory}"/config.txt
+  sudo sed -i '/GPIO pin/d' "${boot_directory}"/config.txt || { echo "Shutdown pin configuration failed" >&2; exit 1; }
+  sudo sed -i '/gpio-shutdown,gpio_pin/d' "${boot_directory}"/config.txt || { echo "Shutdown pin configuration failed" >&2; exit 1; }
   echo "
 ### GPIO pin - RH_Install-Manager ###
 
@@ -30,21 +30,21 @@ dtoverlay=gpio-shutdown,gpio_pin=$2,debounce=$3
 dtoverlay=gpio-shutdown,gpio_pin=$2,debounce=$3
 
 [all]
-  " | sudo tee -a "${boot_directory}"/config.txt
+  " | sudo tee -a "${boot_directory}"/config.txt || { echo "Shutdown pin configuration write failed" >&2; exit 1; }
 fi
 
 if [ "$1" == "led" ]; then
 
   boot_directory=$(boot_directory_check)
 
-  sudo sed -i '/ACT pin/d' "${boot_directory}"/config.txt
-  sudo sed -i '/act-led/d' "${boot_directory}"/config.txt
-  sudo sed -i '/act_led/d' "${boot_directory}"/config.txt
+  sudo sed -i '/ACT pin/d' "${boot_directory}"/config.txt || { echo "LED configuration failed" >&2; exit 1; }
+  sudo sed -i '/act-led/d' "${boot_directory}"/config.txt || { echo "LED configuration failed" >&2; exit 1; }
+  sudo sed -i '/act_led/d' "${boot_directory}"/config.txt || { echo "LED configuration failed" >&2; exit 1; }
 
   echo "
 ### ACT pin - RH_Install-Manager ###
 
 dtoverlay=act-led,gpio=24
 dtparam=act_led_trigger=heartbeat
-  " | sudo tee -a "${boot_directory}"/config.txt
+  " | sudo tee -a "${boot_directory}"/config.txt || { echo "LED configuration write failed" >&2; exit 1; }
 fi
