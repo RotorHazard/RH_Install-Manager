@@ -29,3 +29,28 @@ CI runs on Ubuntu and macOS with Python 3.10. This test requirement does not
 change RHIM's declared Python 3.6 runtime compatibility. These checks do not
 verify installation, updates, services, networking, firmware flashing or
 Raspberry Pi hardware. CI does not deploy anything.
+
+## Runtime preflight coverage
+
+`test_runtime_preflight.py` imports the stdlib-only guard and supplies mocked
+subprocess responses for effective systemd properties and interpreter probes.
+It covers standard and equivalent drop-in layouts, Python version limits,
+venv/pip identity and failures, missing services, systemd errors/timeouts,
+environment overrides, fresh part 1, resumed part 2, and unknown-target consent.
+The literal systemd fixture is synthetic, not captured from a Linux host. It is
+independent of the guard's property constants. Empty deny-list formatting follows
+the upstream [systemctl v247 property printer](https://github.com/systemd/systemd/blob/v247/src/systemctl/systemctl-show.c#L954-L994).
+Tests also cover omitted optional properties and rejection of missing core ones.
+Coordinator functions are loaded with the same AST helper. They run the real
+guard against those fixtures with external actions mocked, checking denial
+before shell commands/markers/success, final stable selection, NH quick stages,
+restart and debug paths, and interpreter arguments on accepted operations.
+The fresh part-1 marker, failed part-2 retry and completion state are checked
+together. NH entry-point tests verify that coordinator failures return nonzero.
+A parser check covers Python 3.6 syntax; it does not execute production code
+on Python 3.6. Shell control flow, dependency installation and bootstrap error
+propagation still require execution in a designated Linux test environment.
+
+No systemctl, installer, apt, pip installation or hardware command is executed
+by these unit tests. Shell checks only parse scripts. The remaining real Linux
+and Pi checks are described in `docs/runtime-checks.md`.

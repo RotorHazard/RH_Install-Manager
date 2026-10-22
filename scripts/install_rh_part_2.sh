@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Recheck the effective runtime even when invoked directly. No ambient interpreter fallback.
+python3 -I -B "$(dirname "$0")/../runtime_preflight.py" part2 "$1" "$2" "$4" ${5:+"$5"} || exit 1
 # $1 is linux user name
 # $2 is actual version of RotorHazard to get.
 
@@ -20,10 +23,10 @@ else
   mv /home/"${1}"/RotorHazard-* /home/"${1}"/RotorHazard || exit 1
 fi
 printf "\n\n   Installing additional software - may take few minutes \n\n\n"
-cd /home/"${1}"/RotorHazard/src/server || echo "$red missing RotorHazard directory"
-pip3 install --upgrade pip
-pip3 install --upgrade --no-cache-dir -r requirements.txt
-pip3 install cffi pillow
+cd /home/"${1}"/RotorHazard/src/server || { echo "$red missing RotorHazard directory"; exit 1; }
+"$4" -I -B -m pip install --upgrade pip || exit 1
+"$4" -I -B -m pip install --upgrade --no-cache-dir -r requirements.txt || exit 1
+"$4" -I -B -m pip install cffi pillow || exit 1
 sudo chmod 777 -R /home/"${1}"/RotorHazard/src/server
 cd /home/"${1}" || exit
 

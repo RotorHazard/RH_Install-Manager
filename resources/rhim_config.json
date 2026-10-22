@@ -4,5 +4,6 @@
   "uart_support_added": false,
   "was_updated_recently": false,
   "first_part_of_install": false,
-  "second_part_of_install": false
+  "second_part_of_install": false,
+  "fresh_install_pending": false
 }

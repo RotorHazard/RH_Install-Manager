@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Recheck the effective runtime even when invoked directly. No ambient interpreter fallback.
+python3 -I -B "$(dirname "$0")/../runtime_preflight.py" update "$1" "$2" "$4" ${5:+"$5"} || exit 1
+
 red="\033[91m"
 endc="\033[0m"
 
@@ -53,13 +56,13 @@ cp /home/"${1}"/RotorHazard_"${upgradeDate}"/src/server/config.json /home/"${1}"
 cp /home/"${1}"/RotorHazard_"${upgradeDate}"/src/server/database.db /home/"${1}"/RotorHazard/src/server/ >/dev/null 2>&1 &
 cp /home/"${1}"/RotorHazard_"${upgradeDate}"/src/server/database.db /home/"${1}"/backup_RH_data >/dev/null 2>&1 &
 time_warning_show
-cd /home/"${1}"/RotorHazard/src/server || echo "$red missing RotorHazard directory $endc"
-pip3 install --upgrade pip
-pip3 install --upgrade --no-cache-dir -r requirements.txt
-pip3 install cffi pillow
+cd /home/"${1}"/RotorHazard/src/server || { echo "$red missing RotorHazard directory $endc"; exit 1; }
+"$4" -I -B -m pip install --upgrade pip || exit 1
+"$4" -I -B -m pip install --upgrade --no-cache-dir -r requirements.txt || exit 1
+"$4" -I -B -m pip install cffi pillow || exit 1
 
 cd /home/"${1}"/RH_Install-Manager/scripts/ || exit
-sudo ./python3_transition.sh "${1}"
+# Preflight accepts only an existing Python 3 venv service; legacy migration would invalidate that check.
 
 # port forwarding
 if ! grep -q "sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80" /etc/rc.local; then

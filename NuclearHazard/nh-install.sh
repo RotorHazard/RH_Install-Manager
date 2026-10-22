@@ -2,7 +2,7 @@
 
 export PYTHONPATH=/home/"$USER"/RH_Install-Manager:$PYTHONPATH
 
-sh ~/RH_Install-Manager/rhim.sh no_start
+sh ~/RH_Install-Manager/rhim.sh no_start || exit $?
 if [ "$1" == "wifi" ]; then
   sh ~/RH_Install-Manager/NuclearHazard/nh-wifi.sh
 else

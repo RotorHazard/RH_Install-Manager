@@ -1,6 +1,8 @@
 import glob
 import os
 import sys
+from shlex import quote
+from runtime_preflight import check_runtime
 from pathlib import Path
 from time import sleep
 from conf_wizard_rh import conf_rh
@@ -208,7 +210,37 @@ def end_of_part_1():
             sys.exit()
 
 
-def installation(conf_allowed, config, git_flag, quick_install=False):
+def show_runtime_error(message):
+    print(message)
+    try:
+        input("\nPress Enter to return.")
+    except EOFError:
+        pass
+
+
+def show_runtime_result(runtime):
+    print("Python {}.{} - OK".format(*runtime["version"][:2]))
+    if runtime["create_venv"]:
+        print("Virtual environment will be created during installation.")
+    else:
+        print("Virtual environment - OK")
+
+
+def run_runtime_script(user, target, git_flag, stage, runtime):
+    script = {"part1": "install_rh_part_1.sh", "part2": "install_rh_part_2.sh",
+              "update": "update_rh.sh"}[stage]
+    executable = runtime["base_python"] if stage == "part1" else runtime["python"]
+    args = ["/home/{}/RH_Install-Manager/scripts/{}".format(user, script),
+            user, target, str(git_flag or ""), executable]
+    if runtime["unknown_target"]:
+        args.append("--accept-unknown")
+    if os.system(" ".join(quote(arg) for arg in args)) != 0:
+        show_runtime_error("Operation failed. Files or dependencies may have changed, and RotorHazard may be stopped. Review the error before retrying.")
+        return False
+    return True
+
+
+def installation(conf_allowed, config, git_flag, quick_install=False, restart=False):
     def first_part_of_installation_done_check(config):
         rhim_config = load_rhim_sys_markers(config.user)
         return True if rhim_config.first_part_of_install else False
@@ -284,8 +316,6 @@ def installation(conf_allowed, config, git_flag, quick_install=False):
                         """.format(thumbs="👍👍👍  ", bold=Bcolors.BOLD_S, green_no_s=Bcolors.GREEN,
                                    endc_no_s=Bcolors.ENDC, endc=Bcolors.ENDC_S, green=Bcolors.GREEN_S)
     rhim_config = load_rhim_sys_markers(config.user)
-    os.system("sudo echo")  # due to Linux specific behaviour
-    os.system("sudo systemctl stop rotorhazard >/dev/null 2>&1 &") if not config.debug_mode else None
     clear_the_screen()
     internet_flag = internet_check()
     first_part_of_installation_done_flag = first_part_of_installation_done_check(config)
@@ -295,10 +325,29 @@ def installation(conf_allowed, config, git_flag, quick_install=False):
             first_part_of_installation_done_flag = False
         else:
             first_part_of_installation_done_flag = True
+    if restart:
+        first_part_of_installation_done_flag = False
     if not internet_flag:
         print(f"\n\t{Bcolors.RED}No internet connection found. Installation canceled.{Bcolors.ENDC}")
         sleep(2)
+        return False
     else:
+        target = check_preferred_rh_version(config)[0]
+        stage = "part2" if first_part_of_installation_done_flag else "part1"
+        print("\nChecking RotorHazard environment...")
+        try:
+            runtime = check_runtime(config.user, target, stage, confirm=input)
+        except ValueError as error:
+            show_runtime_error("Installation not started: " + str(error))
+            return False
+        if runtime["service_present"] and os.system("sudo systemctl stop rotorhazard") != 0:
+            show_runtime_error("Installation not started: could not stop RotorHazard. Check the service and retry.")
+            return False
+        show_runtime_result(runtime)
+        if restart:
+            rhim_config.second_part_of_install = False
+            rhim_config.first_part_of_install = False
+            rhim_config.sys_config_done = False
         if not first_part_of_installation_done_flag:
             if quick_install == 1:
                 os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh shutdown_pin 19 2500")
@@ -317,15 +366,17 @@ def installation(conf_allowed, config, git_flag, quick_install=False):
                     sleep(2)
             rhim_config.uart_support_added, rhim_config.first_part_of_install = True, True
             # UART enabling added here so user won't have to reboot Pi again after doing it in Features Menu
+            if not run_runtime_script(config.user, target, git_flag, "part1", runtime):
+                return False
+            rhim_config.fresh_install_pending = runtime["fresh_install"]
             write_rhim_sys_markers(rhim_config, config.user)
-            os.system(
-                f"/home/{config.user}/RH_Install-Manager/scripts/install_rh_part_1.sh {config.user} {check_preferred_rh_version(config)[0]} {git_flag}")
             os.system(
                 f"""echo "cat /home/{config.user}/RH_Install-Manager/resources/shell_hello_1.txt" >> ~/.bashrc 2>/dev/null""") if not quick_install else None
             input("\n\n\npress Enter to continue")
             clear_the_screen()
             print(first_part_completed_long) if not quick_install else print(first_part_completed_short)
             end_of_part_1()
+            return True
         else:
             print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
             sleep(2)
@@ -333,25 +384,26 @@ def installation(conf_allowed, config, git_flag, quick_install=False):
             print(
                 f"\n\n\t{Bcolors.BOLD}Second part of installation has been started - please wait...{Bcolors.ENDC}")
             print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
-            os.system(
-                f"/home/{config.user}/RH_Install-Manager/scripts/install_rh_part_2.sh {config.user} {check_preferred_rh_version(config)[0]} {git_flag}")
+            if not run_runtime_script(config.user, target, git_flag, "part2", runtime):
+                return False
+            rhim_config.second_part_of_install, rhim_config.sys_config_done = True, True
+            rhim_config.fresh_install_pending = False
+            write_rhim_sys_markers(rhim_config, config.user)
             input("\n\n\npress Enter to continue")
             clear_the_screen()
             print(installation_completed_long) if not quick_install else print(installation_completed_short)
             os.system("sudo chmod 777 -R ~/RotorHazard")
             end_normal_installation() if not quick_install else end_quick_installation(config)
-            rhim_config.second_part_of_install, rhim_config.sys_config_done = True, True
-            write_rhim_sys_markers(rhim_config, config.user)
+            return True
 
 
 def update(config, git_flag):
-    os.system("sudo echo")  # due to Linux specific behaviour
-    os.system("sudo systemctl stop rotorhazard >/dev/null 2>&1 &") if not config.debug_mode else None
     clear_the_screen()
     internet_flag = internet_check()
     if not internet_flag:
         print(f"\n\t{Bcolors.RED}No internet connection found. Update canceled.{Bcolors.ENDC}")
         sleep(2)
+        return False
     else:
         print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
         sleep(2)
@@ -371,10 +423,10 @@ def update(config, git_flag):
             selection = input()
             if selection == 'i':
                 conf_allowed = True
-                installation(conf_allowed, config, "")
+                return installation(conf_allowed, config, "")
             elif selection == 'igit':
                 conf_allowed = True
-                installation(conf_allowed, config, "git")
+                return installation(conf_allowed, config, "git")
             elif selection == 'a':
                 clear_the_screen()
                 return
@@ -415,15 +467,26 @@ def update(config, git_flag):
                     preferred_rh_version = check_preferred_rh_version(config)[0]
                 else:
                     preferred_rh_version = check_preferred_rh_version(config)[2]
+            print("\nChecking RotorHazard environment...")
+            try:
+                runtime = check_runtime(config.user, preferred_rh_version, "update", confirm=input)
+            except ValueError as error:
+                show_runtime_error("RH update not started: " + str(error))
+                return False
+            if os.system("sudo systemctl stop rotorhazard") != 0:
+                show_runtime_error("RH update not started: could not stop RotorHazard. Check the service and retry.")
+                return False
             clear_the_screen()
+            show_runtime_result(runtime)
             print(f"\n\n\t{Bcolors.BOLD}Updating existing installation - please wait...{Bcolors.ENDC}")
             print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
-            os.system(
-                f"/home/{config.user}/RH_Install-Manager/scripts/update_rh.sh {config.user} {preferred_rh_version} {git_flag}")
+            if not run_runtime_script(config.user, preferred_rh_version, git_flag, "update", runtime):
+                return False
             config_flag, config_soft = check_rotorhazard_config_status(config)
             server_installed_flag, server_version_name, _ = get_rotorhazard_server_version(config)
             os.system("sudo chmod -R 777 ~/RotorHazard")
             end_update(config, config_flag, server_installed_flag)
+            return True
 
 
 def origin_change(config):
@@ -604,10 +667,7 @@ def main_window(config):
                             print("\nPlease type the correct answer")
                     if confirm == 'y' or confirm == 'yes':
                         conf_allowed = True
-                        (rhim_config.second_part_of_install, rhim_config.first_part_of_install,
-                         rhim_config.sys_config_done) = False, False, False
-                        write_rhim_sys_markers(rhim_config, config.user)
-                        installation(conf_allowed, config, "")
+                        installation(conf_allowed, config, "", restart=True)
                     elif confirm in ['n', 'no', 'abort', 'a']:
                         pass
                 elif selection == 'c' or selection == 'cgit':
@@ -620,11 +680,8 @@ def main_window(config):
                             print("\nPlease type the correct answer")
                     if confirm == 'y' or confirm == 'yes':
                         conf_allowed = True
-                        (rhim_config.second_part_of_install, rhim_config.first_part_of_install,
-                         rhim_config.sys_config_done) = False, False, False
-                        write_rhim_sys_markers(rhim_config, config.user)
                         git_flag = "git" if selection == 'cgit' else ''
-                        installation(conf_allowed, config, git_flag)
+                        installation(conf_allowed, config, git_flag, restart=True)
                     elif confirm in ['n', 'no', 'abort', 'a']:
                         pass
                 elif selection == 'a':

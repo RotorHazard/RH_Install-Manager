@@ -28,19 +28,6 @@ check_for_new_rhim() {
   fi
 }
 
-check_for_python_venv_flag() {
-
-  if [ -f .python_venv_flag ] && [ ! -d ~/.venv ]; then
-    printf "preparing python venv\n\n"
-    python -m venv --system-site-packages ~/.venv || (echo "switched to python3 command" && python3 -m venv --system-site-packages ~/.venv)
-    source ~/.venv/bin/activate # this line doesn't affect anything but here as a reference
-    rm .python_venv_flag >/dev/null 2>&1
-  else
-    printf "python venv present\n\n"
-  fi
-
-}
-
 open_software_alias_check() {
 
   if ! grep -q "alias rhim=" ~/.bashrc; then
@@ -87,14 +74,14 @@ dependencies_check() {
 
   which git >/dev/null
   if [ $? -gt 0 ]; then
-    echo git has to be installed && sudo apt install git -y
+    echo git has to be installed && sudo apt install git -y || return 1
   else
     echo git"               "found # those  cure my ocd
   fi
 
   which python3 >/dev/null
   if [ $? -gt 0 ]; then
-    echo python3 has to be installed && sudo apt install python3 -y
+    echo python3 has to be installed && sudo apt install python3 -y || return 1
   else
     echo python3"           "found # those  cure my ocd
   fi
@@ -129,7 +116,7 @@ dependencies_check() {
 
   which pip3 >/dev/null
   if [ $? -gt 0 ]; then
-    echo pip3 package has to be installed && sudo apt install python3-pip -y
+    echo pip3 package has to be installed && sudo apt install python3-pip -y || return 1
   else
     echo pip3"              "found
   fi
@@ -155,13 +142,13 @@ dependencies_check() {
   if check_python_package 'wheel'; then
     echo wheel"             "found
   else
-    echo wheel has to be installed && pip3 install wheel
+    echo wheel has to be installed && sudo apt install python3-wheel -y
   fi
 
   if check_python_package 'requests'; then
     echo requests"          "found
   else
-    echo requests has to be installed && pip3 install requests
+    echo requests has to be installed && sudo apt install python3-requests -y || return 1
   fi
 
   if check_package 'python3-gpiozero'; then
@@ -173,7 +160,7 @@ dependencies_check() {
   if check_package_when_errors 'python3-requests'; then
     echo python3-requests"  "found
   else
-    echo python3-requests has to be installed && sudo apt install python3-requests -y
+    echo python3-requests has to be installed && sudo apt install python3-requests -y || return 1
   fi
 
   if check_package 'python3-dev'; then
@@ -185,25 +172,25 @@ dependencies_check() {
   if check_package_when_errors 'python3-venv'; then
     echo python3-venv"      "found
   else
-    echo python3-venv has to be installed && sudo apt install python3-venv -y
+    echo python3-venv has to be installed && sudo apt install python3-venv -y || return 1
   fi
 
   if check_package 'python3-smbus2'; then
     echo python3-smbus2"    "found
   else
-    echo python3-smbus2 has to be installed && sudo apt install python3-smbus2
+    echo python3-smbus2 has to be installed && sudo apt install python3-smbus2 -y
   fi
 
   if check_package 'python3-smbus'; then
     echo python3-smbus"     "found
   else
-    echo python3-smbus has to be installed && sudo apt install python3-smbus
+    echo python3-smbus has to be installed && sudo apt install python3-smbus -y
   fi
 
   if check_python_package 'RPi.GPIO'; then
     echo RPi.GPIO"          "found
   else
-    echo RPi.GPIO has to be installed && pip3 install RPi.GPIO || echo - only on Pi -
+    echo RPi.GPIO has to be installed && sudo apt install python3-rpi.gpio -y || echo - only on Pi -
   fi
 
 }
@@ -211,11 +198,10 @@ dependencies_check() {
 print_info_message
 check_for_new_rhim
 open_software_alias_check &
-dependencies_check
+dependencies_check || exit $?
 wait
-check_for_python_venv_flag
+# RH venv creation belongs to validated installation part 1; legacy flags do not trigger migration.
 if [ "$1" != "no_start" ]; then
-  python3 start_rhim.py || python3 start_rhim.py
+  python3 start_rhim.py
+  exit $?
 fi
-# for some reason 'requests' module sometimes isn't loaded properly the first time
-# and requires second instance of the program to be launched
