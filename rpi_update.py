@@ -548,7 +548,8 @@ def update(config, git_flag):
             clear_the_screen()
             show_runtime_result(runtime)
             print(f"\n\n\t{Bcolors.BOLD}Updating existing installation - please wait...{Bcolors.ENDC}")
-            print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
+            print(f"\n\n\t{Bcolors.BOLD}This update may take several minutes, or longer on slower systems.\n"
+                  f"\tSome steps produce no output. Please do not interrupt.{Bcolors.ENDC}\n\n\n", flush=True)
             if not run_runtime_script(config.user, preferred_rh_version, git_flag, "update", runtime):
                 return False
             config_soft, config_flag = check_rotorhazard_config_status(config)

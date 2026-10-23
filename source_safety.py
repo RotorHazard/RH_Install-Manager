@@ -703,10 +703,12 @@ def run_operation(home, stage, user, target, method, executable, accept_unknown=
                 state = {"stage": stage, "target": target, "backup": backup, "data": data,
                          "revision": revision, "prepared": prepared,
                          "fresh_install": runtime.get("fresh_install", False)}
+                print("Preparing the new installation and verifying your data...", flush=True)
                 restore_to_stage(home, prepared, backup, data)
                 if resolve_data(home, read_source=prepared)["real"] != data["real"]:
                     raise SafetyError("Prepared source resolves a different data path. Review selected source and backup: " + backup)
                 env = dict(os.environ, RHIM_SOURCE_PAYLOAD="host", RHIM_PREPARED_SOURCE=prepared)
+                print("Updating system packages and Python dependencies...", flush=True)
                 command(["bash", script, user, target, method, executable] + (["--accept-unknown"] if accept_unknown else []),
                         env=env, pass_fds=(fd,))
                 current_runtime = check_runtime(user, target, stage, (lambda prompt: "yes") if accept_unknown else None)
