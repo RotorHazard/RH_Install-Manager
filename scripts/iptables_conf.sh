@@ -1,7 +1,15 @@
 #!/bin/bash
 
 # Validate and persist before changing the running firewall.
-sudo python3 -I -B "$(dirname "$0")/../rc_local.py" || exit 1
+forwarding_mode=$(sudo python3 -I -B "$(dirname "$0")/../rc_local.py") || exit 1
+case "$forwarding_mode" in
+  external)
+    echo "RHIM: port forwarding is externally managed; configuration and reachability are the operator's responsibility."
+    exit 0
+    ;;
+  managed) ;;
+  *) echo "Invalid forwarding mode from rc.local helper" >&2; exit 1 ;;
+esac
 
 ensure_forwarding_rule() {
   local status

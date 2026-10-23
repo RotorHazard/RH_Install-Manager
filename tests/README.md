@@ -134,6 +134,13 @@ firewall commands. They check custom-command preservation, historical entries,
 repeat runs, current-content backups, refused layouts, concurrent edits and
 write failures. Pinned upstream Raspberry Pi OS rc.local fixtures exercise the
 stock IP-address display, and custom scripts exercise the manual-block path.
+The generic disabled-historical-rules fixture is refused without the exact
+external-ownership directive. With it, tests check unchanged bytes, mode and
+inode, no backups, and zero firewall calls through the actual configurator
+shell entry with stub sudo/Python-path/firewall boundaries. Invalid helper
+output, malformed/duplicate directives and managed-rule conflicts fail closed.
+Coordinator fixtures cover fresh part 2, reinstall, update and activated retries
+against the current directive; their installer payloads remain mocked.
 The persistent POSIX shell block is also executed with stubs
 to check error propagation and isolation of shell variables and arguments.
 These tests do not prove root metadata handling or boot-time service execution.
@@ -188,3 +195,13 @@ These checks do not verify physical node flashing, GPIO/I2C/UART, saved races,
 long-running operation, Pi reboot or normal service stop in the private-PID
 test setup. They also do not prove native Python 3.6 execution or GitHub CI.
 Hardware and host-network configuration need their own designated tests.
+
+At revision `733014f`, real Linux menu checks covered refusal before the
+external-ownership comment, a 4.4.0 to 4.5.0 update and repeated updates after
+the operator added it. Normal updates used real apt and pip. A separate actual
+RHIM menu update on Raspberry Pi preserved data, configuration, venv identity
+and externally managed forwarding, with HTTP authentication and SQLite
+integrity checks passing. The Pi check used real pip but explicitly skipped
+four apt commands, so it does not verify Pi host-package updates. Physical
+timing hardware remains unverified. The Linux suite passed 202 tests,
+including syntax checks of 35 indexed shell files.

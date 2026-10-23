@@ -614,6 +614,62 @@ class OperationTests(FilesystemCase):
         self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
         self.assertNotIn("activate", self.events)
 
+    def test_disabled_historical_fixture_requires_opt_out_before_effects(self):
+        content = (ROOT / "tests/fixtures/rc_local_external_candidate").read_text()
+        self.rc_path.write_text(content)
+        self.rc_path.chmod(0o640)
+        before = (self.rc_path.read_bytes(), rc.identity(self.rc_path.stat()))
+        for stage in ("part2", "update"):
+            with self.subTest(stage=stage), patch.object(safety, "make_backup") as backup:
+                with self.assertRaisesRegex(safety.SafetyError, "Incomplete historical"):
+                    self.run_operation(stage)
+                backup.assert_not_called()
+                self.assertNotIn("prepare", self.events)
+                self.assertNotIn("stop", self.events)
+                self.assertIsNone(safety.read_state(str(self.home)))
+                self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
+
+    def test_external_guard_allows_fresh_part2_reinstall_and_update(self):
+        content = (ROOT / "tests/fixtures/rc_local_external_candidate").read_text()
+        self.rc_path.write_text(content.replace("\n", "\n" + rc.EXTERNAL + "\n", 1))
+        self.rc_path.chmod(0o640)
+        before = (self.rc_path.read_bytes(), rc.identity(self.rc_path.stat()))
+        self.runtime.update(fresh_install=True, service_present=False)
+        for stage in ("part2", "part2", "update"):
+            self.events.clear()
+            self.run_operation(stage)
+            self.assertIn("activate", self.events)
+            self.assertIsNone(safety.read_state(str(self.home)))
+            self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
+            self.runtime["fresh_install"] = False
+
+    def test_activated_retry_obeys_current_external_directive(self):
+        content = (ROOT / "tests/fixtures/rc_local_external_candidate").read_text()
+        for stage in ("part2", "update"):
+            with self.subTest(stage=stage):
+                self.rc_path.write_text(content.replace("\n", "\n" + rc.EXTERNAL + "\n", 1))
+                self.failure = "activate"
+                with self.assertRaisesRegex(safety.SafetyError, "injected activate"):
+                    self.run_operation(stage)
+                pending = Path(safety.state_path(str(self.home))).read_bytes()
+                for current in (content, content + rc.EXTERNAL + "\n" + rc.RULES[0] + "\n"):
+                    self.rc_path.write_text(current)
+                    self.events.clear()
+                    self.runtime["pending_daemon_reload"] = True
+                    with self.assertRaisesRegex(safety.SafetyError, "layout check failed"):
+                        self.run_operation(stage)
+                    self.assertEqual(self.events, ["runtime"])
+                    self.assertEqual(Path(safety.state_path(str(self.home))).read_bytes(), pending)
+                self.rc_path.write_text(content.replace("\n", "\n" + rc.EXTERNAL + "\n", 1))
+                before = (self.rc_path.read_bytes(), rc.identity(self.rc_path.stat()))
+                self.events.clear()
+                self.failure = None
+                self.run_operation(stage)
+                self.assertIn("reload", self.events)
+                self.assertIn("activate", self.events)
+                self.assertNotIn("prepare", self.events)
+                self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
+
     def test_cli_forwarding_refusals_have_no_traceback_or_effects(self):
         self.unsupported_rc()
         for read_error in (False, True):

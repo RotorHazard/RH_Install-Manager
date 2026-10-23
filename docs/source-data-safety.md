@@ -151,6 +151,26 @@ RHIM rules must not remain alongside it. RHIM does not prove that a manually
 placed block is reachable. A changed block in an unsupported custom layout
 requires manual review again.
 
+If you manage forwarding outside RHIM, add this exact standalone comment to
+`/etc/rc.local` after its supported shell header:
+
+```
+# RHIM PORT FORWARDING: external
+```
+
+This explicitly opts out of RHIM forwarding setup for updates, fresh installs,
+reinstalls and activated retries. RHIM validates the current file again at final
+setup, then skips all forwarding persistence writes, backups, permission changes
+and live iptables queries or changes. It leaves file bytes, mode and inode intact.
+The operator owns the actual rules, persistence and reachability; RHIM does not
+check or claim that ports work. Historical headings and commented-out rules may
+remain. An active recognized historical RHIM rule or any RHIM managed block
+marker conflicts with external mode and is refused. Duplicate or malformed
+directives are refused too. Without the directive, disabled historical rules do
+not opt out and the usual layout checks still apply. File-type, link, UTF-8,
+line-ending and shell-header checks remain in force. RHIM does not interpret
+custom shell syntax or infer ownership from firewall rules or comment wording.
+
 The file replacement and live firewall changes are separate operations. A
 failure can leave the persistent configuration written before all live rules
 have been applied. Inspect the reported error before retrying. Earlier RHIM
