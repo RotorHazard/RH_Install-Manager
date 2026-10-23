@@ -101,11 +101,12 @@ renames. Switching interruptions retain prepared/previous copies and report
 concrete manual recovery paths, including changed external data. Unknown FIFOs
 can be removed from live source and retried without editing state. Partial
 backup failures remove only the unpublished copy and permit a clean retry.
-Image conflicts keep custom bitmaps, retain new-only images, and keep new code. A real SQLite WAL fixture is opened only in its backup copy.
+Image conflicts keep custom bitmaps, retain new-only images, and keep new code.
+A real SQLite WAL fixture is opened only in its backup copy.
 Local Git fixtures check ref/checkout binding without network access. Mocked
 urllib response bytes feed the real ZIP reader with an empty PATH; the default
-ZIP bootstrap does not invoke wget/unzip, and download requests use timeout=60. FIFO
-backup runs under a subprocess deadline and verifies metadata, exclusion of
+ZIP bootstrap does not invoke wget/unzip, and download requests use timeout=60.
+FIFO backup runs under a subprocess deadline and verifies metadata, exclusion of
 stale lgpio state, refusal of unknown active FIFOs and other special files.
 Kernel-lock tests cover inherited descriptor reuse, contention, invalid flags
 and descriptors, exceptions and SIGKILL release.
@@ -118,8 +119,8 @@ separately check the proven-state reload request and rejection of unknown
 service/runtime/environment overrides; this is not a real systemd reload test.
 An isolated Bash helper test uses a fake iptables boundary to verify repeated
 forwarding setup adds each rule once and propagates query/add failures. It does
-not execute the configuration script or access /etc. Writer-scan tests use synthetic
-`/proc` directories; they do not inspect host processes or run sudo/systemctl.
+not execute the configuration script or access /etc. Writer-scan tests use
+synthetic `/proc` directories; they do not inspect host processes or run sudo/systemctl.
 No installer payload, package manager, downloaded code, service or hardware
 operation runs on macOS. No claim of Linux/Pi installation proof follows from
 this suite. See [source/data policy](../docs/source-data-safety.md) for copy and

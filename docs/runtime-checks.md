@@ -23,7 +23,13 @@ For the current configured account `USER`, RHIM accepts an effective service wit
 - One direct `ExecStart=/home/USER/.venv/bin/python3 server.py`. The equivalent
   absolute server.py path is accepted. Extra arguments and wrappers are refused.
 - No environment overrides, pre/post execution hooks or execution sandbox
-  settings checked by the guard, and no pending daemon reload.
+  settings checked by the guard. Pending daemon reloads are normally refused.
+
+A verified fresh part-2 activation can request a reload when service setup
+previously failed. RHIM checks its recorded backup, activated source identity
+and all other runtime conditions, reloads systemd, then repeats the full guard.
+Other pending unit changes require explicit review and a manual reload. See
+[source activation and recovery](source-data-safety.md#activation-and-recovery).
 
 The read-only query uses `systemctl show --all --property=...` and checks loaded
 properties. Drop-ins producing these same effective values are accepted. RHIM
@@ -48,8 +54,10 @@ A missing service is normal when there is no `/home/USER/RotorHazard` tree
 and this is an installation stage. After successful fresh part 1, RHIM records
 `fresh_install_pending` in its existing marker file. That explicit state permits
 retrying a fresh installation if part 2 leaves downloaded source but no service
-after a pip failure. The working venv is still required. Old markers without
-this field do not authorize treating an existing tree as fresh, and an update
+after an activation failure. Source preparation and pip failures before
+activation keep the live source path unchanged. The working venv is still
+required. Old markers without this field do not authorize treating an existing
+tree as fresh, and an update
 always requires the service. The pending state is cleared after successful
 part 2, before the completion menu can request a reboot.
 
@@ -74,8 +82,9 @@ venv, not RotorHazard startup or hardware modules. The executable path is kept
 as the venv path rather than resolved to its base-Python symlink. Dependency
 installation uses that venv's `python3 -I -B -m pip`.
 
-The three installation/update shell scripts repeat the read-only guard before
-their first action. Direct invocation now requires arguments `USER TARGET MODE
+The three installation/update shell scripts enter the shared source engine,
+which repeats the runtime guard before source preparation or host changes.
+Direct invocation requires arguments `USER TARGET MODE
 PYTHON`, where MODE is `git` or an empty quoted string, and PYTHON matches the
 validated executable. Part 1 uses `/usr/bin/python3` only for a new venv;
 otherwise all stages use `/home/USER/.venv/bin/python3`. A missing or mismatched
@@ -113,9 +122,10 @@ existing installation. RHIM does not infer that either directory is disposable.
 This guard checks interpreter selection, version, venv identity and pip
 availability. It does not test server startup, dependency/plugin compatibility,
 hardware, every possible systemd restriction or changes made concurrently after
-the probe. It supplies no rollback. Existing source/data/backup behavior and
-broader installation-stage error handling are separate work. Host package
-updates can require a reboot and can affect the runtime after preflight.
+the probe. It supplies no rollback. Source preparation, verified backups and
+retry behavior are described in the [source/data policy](source-data-safety.md).
+Host package updates can require a reboot and can affect the runtime after
+preflight.
 An operation failing after it starts can leave changed files/dependencies and
 a stopped service. Review its error and recovery state before retrying.
 
