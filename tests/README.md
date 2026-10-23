@@ -155,6 +155,16 @@ They describe the tested revisions and environments, not all supported systems.
   received a separate Linux check, including all three shell entry points.
   At that revision, 156 tests and syntax checks of 32 shell scripts passed
   on Linux. The test environment was restored after each scenario.
+- At revision `3484c63`, a separate Debian 12 check passed 183 tests and syntax
+  checks of 34 indexed shell files, including the two stock rc.local fixtures.
+  Real root-owned rc.local files preserved custom commands, current and first
+  backups, permissions and no-op identity. Unsupported files were refused
+  without changing NAT rules. The native rc-local service restored forwarding
+  after a container reboot and retained exactly two rules after repeated
+  service restarts. External HTTP requests verified both redirects, 80 to
+  5000 and 8080 to 80, with matching packet-counter increases. Missing-iptables
+  fixtures returned 127 and stopped before subsequent commands. The original
+  test-system snapshot and file manifest were restored and verified afterward.
 - Raspberry Pi 5, Debian 13 arm64 and Python 3.13.5: official RotorHazard 4.5.0
   ran twice on private copies of an existing 4.4.0 installation's data and
   venv. Wheel-only dependency updates, HTTP authentication, authenticated
