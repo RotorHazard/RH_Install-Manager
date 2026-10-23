@@ -19,6 +19,8 @@ UNRELEASED
    pending recovery paths and the last verified backup. Recovery instructions
    and cleanup limits are in docs/source-data-safety.md. Source copies do not
    restore venv packages, host changes or later database migrations.
+6. Resume an unfinished update using its recorded target, including a one-time
+   switch to stable, without changing the configured source channel.
 
 6n4.440.36
 1. RotorHazard 4.5.0-beta.1 release installation and update support added.

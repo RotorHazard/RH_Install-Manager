@@ -500,6 +500,73 @@ class CoordinatorTests(RuntimeFixture):
         self.assert_denied()
         self.assertIn("v4.5.0 requires Python", self.output.getvalue())
 
+    def test_pending_stable_update_uses_recorded_target_for_each_channel(self):
+        for channel in ("main", "beta", "feature/custom-rh"):
+            with self.subTest(channel=channel):
+                update = self.coordinator("update")
+                self.config.rh_version = channel
+                self.pending_source = {"stage": "update", "target": "v4.5.0", "phase": "activated"}
+                runtime = Mock(wraps=preflight.check_runtime)
+                offer = Mock(side_effect=AssertionError("Pending updates must skip the stable offer"))
+                choice = Mock(side_effect=AssertionError("Pending updates already have a target"))
+                with patch.dict(update.__globals__, check_runtime=runtime,
+                                rh_update_check=offer, check_preferred_rh_version=choice):
+                    self.assertTrue(update(self.config, ""))
+                self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+                runtime.assert_called_once_with(USER, "v4.5.0", "update", confirm=self.inputs)
+                self.assertEqual(shlex.split(self.effects.system.call_args[0][0])[1:],
+                                 [USER, "v4.5.0", "", PYTHON])
+                self.assertEqual(self.config.rh_version, channel)
+                self.inputs.assert_not_called()
+                offer.assert_not_called()
+                choice.assert_not_called()
+                self.effects.end_update.assert_called_once()
+                self.assertIn("Resuming pending update to v4.5.0.", self.output.getvalue())
+
+    def test_pending_update_switch_and_other_stage_refuse_without_effects(self):
+        for stage, phase in (("update", "switching"), ("part2", "activated")):
+            with self.subTest(stage=stage, phase=phase):
+                update = self.coordinator("update", stable_offer=True)
+                self.pending_source = {"stage": stage, "target": "v4.5.0", "phase": phase}
+                self.effects.activation.side_effect = ValueError("Interrupted source switch; manual recovery required")
+                offer = Mock(side_effect=AssertionError("Pending recovery must skip the offer"))
+                with patch.dict(update.__globals__, rh_update_check=offer):
+                    self.assertFalse(update(self.config, ""))
+                if stage == "update":
+                    self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+                    self.assertIn("manual recovery required", self.output.getvalue())
+                else:
+                    self.effects.activation.assert_not_called()
+                    self.assertIn("Retry part2 for v4.5.0 first", self.output.getvalue())
+                self.assertEqual(self.commands, [])
+                offer.assert_not_called()
+                self.assert_denied()
+
+    def test_failed_one_time_stable_update_retries_after_live_becomes_stable(self):
+        update = self.coordinator("update", stable_offer=True, replies=["y"])
+        live_version = ["4.4.0"]
+        offer = Mock(side_effect=lambda config: live_version[0] != "4.5.0")
+
+        def activation_fails(command):
+            live_version[0] = "4.5.0"
+            self.pending_source = {"stage": "update", "target": "v4.5.0", "phase": "activated"}
+            return 1
+
+        self.effects.system.side_effect = activation_fails
+        with patch.dict(update.__globals__, rh_update_check=offer):
+            self.assertFalse(update(self.config, ""))
+            self.effects.end_update.assert_not_called()
+            self.assertEqual(live_version[0], "4.5.0")
+            self.effects.system.side_effect = None
+            self.assertTrue(update(self.config, ""))
+        offer.assert_called_once_with(self.config)
+        self.assertEqual(self.config.rh_version, "main")
+        self.assertEqual(self.effects.system.call_count, 2)
+        for call in self.effects.system.call_args_list:
+            self.assertEqual(shlex.split(call.args[0])[1:], [USER, "v4.5.0", "", PYTHON])
+        self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+        self.effects.end_update.assert_called_once()
+
     def test_unknown_update_default_no(self):
         update = self.coordinator("update", stable_offer=True, replies=["n", ""])
         update(self.config, "")

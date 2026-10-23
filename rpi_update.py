@@ -491,9 +491,18 @@ def update(config, git_flag):
             else:
                 return
         else:
+            try:
+                pending = read_state("/home/" + config.user)
+                if pending and pending["stage"] != "update":
+                    raise ValueError("Recovery is pending. Retry {} for {} first.".format(pending["stage"], pending["target"]))
+            except ValueError as error:
+                show_runtime_error("RH update not started: " + str(error))
+                return False
             change_update_to_stable = False
-            preferred_rh_version = check_preferred_rh_version(config)[0]
-            if rh_update_check(config) is True and config.rh_version != 'stable':
+            preferred_rh_version = pending["target"] if pending else check_preferred_rh_version(config)[0]
+            if pending:
+                print("Resuming pending update to {}.".format(preferred_rh_version))
+            elif rh_update_check(config) is True and config.rh_version != 'stable':
                 clear_the_screen()
                 confirm_stable_update_screen = """{bold}
 
@@ -527,10 +536,7 @@ def update(config, git_flag):
                     preferred_rh_version = check_preferred_rh_version(config)[2]
             print("\nChecking RotorHazard environment...")
             try:
-                pending = read_state("/home/" + config.user)
                 if pending:
-                    if pending["stage"] != "update" or pending["target"] != preferred_rh_version:
-                        raise ValueError("Recovery is pending. Retry {} for {} first.".format(pending["stage"], pending["target"]))
                     check_activation("/home/" + config.user, pending)
                 runtime = check_runtime(config.user, preferred_rh_version, "update", confirm=input)
             except ValueError as error:
