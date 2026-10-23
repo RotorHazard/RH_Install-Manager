@@ -126,3 +126,46 @@ operation runs on macOS. No claim of Linux/Pi installation proof follows from
 this suite. See [source/data policy](../docs/source-data-safety.md) for copy and
 recovery limits. Production helpers retain Python 3.6 syntax/API choices;
 the unittest/CI environment still requires Python 3.10+.
+
+## Recorded system verification
+
+On 2026-10-23, the following checks were run separately from this unit suite.
+They describe the tested revisions and environments, not all supported systems.
+
+- Debian 12 amd64, Python 3.11.2 and systemd 252: actual RHIM installation of
+  RotorHazard 4.5.0 through ZIP, part 1, reboot and part 2; installation of
+  4.4.0 followed by a Git update to 4.5.0; repeated updates and reinstallation.
+  These flows used revision `ba2c245`, including the real coordinator, shell,
+  sudo, package installation and service setup. Default, external datapath.ini
+  and legacy source-tree data were checked. Configuration, pilot data, user
+  images and plugins survived; the existing venv identity was retained.
+- Controlled failures covered source download, pip, service stop, unreadable
+  backup data, concurrent operations and activation retry. Newer data after a
+  pre-switch failure survived retry. An interrupted switch was checked in an
+  isolated filesystem fixture. The inherited-lock correction in `b5df399`
+  received a separate Linux check, including all three shell entry points.
+  At that revision, 156 tests and syntax checks of 32 shell scripts passed
+  on Linux. The test environment was restored after each scenario.
+- Raspberry Pi 5, Debian 13 arm64 and Python 3.13.5: official RotorHazard 4.5.0
+  ran twice on private copies of an existing 4.4.0 installation's data and
+  venv. Wheel-only dependency updates, HTTP authentication, authenticated
+  Socket.IO writes, rejection of unauthenticated writes, SQLite integrity,
+  original pilot/settings preservation and persistence after restart passed.
+  SIGINT reached the application handler; shutdown was logged to completion
+  and its cgroup emptied in about 2.7 seconds without a forced kill.
+  Its independent process exit status was not captured by the private-PID
+  service. This was an application smoke test, not a full RHIM installation
+  or update on the Pi. The original installation and unrelated services were
+  preserved.
+
+The Pi application used private network/device namespaces. GPIO probing logged
+a caught hardware-access error; I2C and timing nodes were unavailable. The
+observed configuration changes matched upstream's parameter rename and save
+timestamp update. Existing system-site pip-check issues were unchanged. The Pi
+lacked a cgroup memory controller, so this short trusted test used per-process
+resource limits and a watchdog; it did not prove an aggregate memory limit.
+
+These checks do not verify physical node flashing, GPIO/I2C/UART, saved races,
+long-running operation, Pi reboot or normal service stop in the private-PID
+test setup. They also do not prove native Python 3.6 execution or GitHub CI.
+Hardware and host-network configuration need their own designated tests.

@@ -142,3 +142,7 @@ were refused without changing the measured service state or fixture files.
 The captured systemctl output is retained in the test fixtures. This verifies
 the guard with a real venv and service, not installation scripts, real
 RotorHazard startup, dependency installation or Raspberry Pi hardware.
+
+Later installation/update and isolated ARM application checks are summarized
+in [recorded system verification](../tests/README.md#recorded-system-verification).
+Their scope and limitations are separate from the read-only guard trial above.
