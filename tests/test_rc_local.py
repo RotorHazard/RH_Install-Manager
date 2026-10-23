@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # rc_local_buster: https://raw.githubusercontent.com/RPi-Distro/pi-gen/638c7521ee0c431fafca1e2bd4fd25705b37ea5b/stage2/01-sys-tweaks/files/rc.local
 STOCK_FIXTURES = tuple(ROOT / 'tests/fixtures' / name
                        for name in ('rc_local_bullseye', 'rc_local_buster'))
+EXTERNAL_CANDIDATE = (ROOT / 'tests/fixtures/rc_local_external_candidate').read_text()
 SPEC = importlib.util.spec_from_file_location('rc_local', str(ROOT / 'rc_local.py'))
 rc = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(rc)
@@ -59,6 +60,83 @@ class RcLocalTests(unittest.TestCase):
         with self.assertRaises(rc.ConfigError):
             self.configure()
         self.assertEqual(self.backups(), [])
+        self.put(EXTERNAL_CANDIDATE.replace('\n', '\n' + rc.EXTERNAL + '\n', 1))
+        rc.validate(str(self.path))
+        self.put(EXTERNAL_CANDIDATE)
+        with self.assertRaisesRegex(rc.ConfigError, 'Incomplete historical'):
+            self.configure()
+        self.assertEqual(self.path.read_text(), EXTERNAL_CANDIDATE)
+        self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_disabled_historical_rules_require_explicit_external_directive(self):
+        self.put(EXTERNAL_CANDIDATE)
+        before = rc.identity(self.path.stat())
+        for operation in (rc.validate, rc.configure):
+            with self.assertRaisesRegex(rc.ConfigError, 'Incomplete historical'):
+                operation(str(self.path))
+        self.assertEqual(self.path.read_text(), EXTERNAL_CANDIDATE)
+        self.assertEqual(rc.identity(self.path.stat()), before)
+        self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_external_preserves_bytes_mode_inode_and_creates_no_backup(self):
+        for content in (EXTERNAL_CANDIDATE, '#!/bin/sh\nif true; then\n echo custom &\nfi\nexit 0\n'):
+            self.put(content.replace('\n', '\n' + rc.EXTERNAL + '\n', 1))
+            before = (self.path.read_bytes(), rc.identity(self.path.stat()))
+            for attempt in range(2):
+                self.assertIsNone(rc.validate(str(self.path))[2])
+                self.assertIsNone(self.configure())
+                self.assertEqual((self.path.read_bytes(), rc.identity(self.path.stat())), before)
+                self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_external_malformed_duplicate_and_conflicting_directives_refused(self):
+        for directive in (rc.EXTERNAL + ' ', ' ' + rc.EXTERNAL, rc.EXTERNAL.lower(),
+                          '# RHIM PORT FORWARDING', '#RHIM PORT FORWARDING: external',
+                          '# RHIM PORT FORWARDING: managed', rc.EXTERNAL + '\n' + rc.EXTERNAL):
+            with self.subTest(directive=directive):
+                self.put('#!/bin/bash\n' + directive + '\nexit 0\n')
+                with self.assertRaisesRegex(rc.ConfigError, 'Invalid or duplicate'):
+                    self.configure()
+                self.assertEqual(list(self.root.iterdir()), [self.path])
+        for conflict in (rc.BLOCK, rc.BEGIN, rc.END) + rc.RULES + tuple('sudo ' + rule for rule in rc.RULES):
+            with self.subTest(conflict=conflict):
+                self.put('#!/bin/bash\n' + rc.EXTERNAL + '\n' + conflict + '\nexit 0\n')
+                before = (self.path.read_bytes(), rc.identity(self.path.stat()))
+                with self.assertRaisesRegex(rc.ConfigError, 'conflicts'):
+                    self.configure()
+                self.assertEqual((self.path.read_bytes(), rc.identity(self.path.stat())), before)
+                self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_external_retains_text_header_link_and_concurrent_change_checks(self):
+        original = '#!/bin/bash\n' + rc.EXTERNAL + '\nexit 0\n'
+        for data in (original.replace('#!/bin/bash', '#!/usr/bin/env bash').encode(),
+                     original.replace('\n', '\r\n').encode(),
+                     (original + '\x00').encode(), original.encode() + b'\xff'):
+            self.path.write_bytes(data)
+            with self.assertRaises(rc.ConfigError):
+                self.configure()
+            self.assertEqual(self.path.read_bytes(), data)
+        self.put(original)
+        target = self.root / 'target'
+        self.path.rename(target)
+        self.path.symlink_to(target)
+        with self.assertRaises(rc.ConfigError):
+            self.configure()
+        self.path.unlink()
+        os.link(target, self.path)
+        with self.assertRaises(rc.ConfigError):
+            self.configure()
+        self.path.unlink()
+        target.rename(self.path)
+        verify = rc.verify
+
+        def change_before_verify(*args):
+            self.path.write_text('#!/bin/sh\nexit 0\n')
+            verify(*args)
+
+        with patch.object(rc, 'verify', side_effect=change_before_verify):
+            with self.assertRaisesRegex(rc.ConfigError, 'concurrently'):
+                self.configure()
+        self.assertEqual(list(self.root.iterdir()), [self.path])
 
     def test_absent_creates_executable_posix_script_without_backup(self):
         self.assertTrue(self.configure())
@@ -398,15 +476,7 @@ exit "${ADD_STATUS:-0}"
 
     def test_actual_shell_entry_refuses_before_iptables_and_propagates_errors(self):
         self.stub('sudo', '#!/bin/sh\nexec "$@"\n')
-        self.stub('python3', '#!' + sys.executable + '''
-import os, runpy, sys
-helper = runpy.run_path(sys.argv[-1])
-try:
-    helper['configure'](os.environ['FIXTURE'])
-except Exception as error:
-    print(str(error), file=sys.stderr)
-    sys.exit(1)
-''')
+        self.python_stub()
         self.stub('hostname', '#!/bin/sh\necho 127.0.0.1\n')
         self.firewall_stub()
         script = str(ROOT / 'scripts/iptables_conf.sh')
@@ -420,6 +490,59 @@ except Exception as error:
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn(' -A ', ' ' + (self.root / 'calls').read_text())
         self.assertIn(b'Checking port 80', result.stderr)
+        for status in ('0', '1'):
+            (self.root / 'calls').write_text('')
+            result = subprocess.run(['bash', script], env=self.environment(QUERY_STATUS=status),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = (self.root / 'calls').read_text().splitlines()
+            self.assertEqual(len(calls), 2 if status == '0' else 4)
+            self.assertIn(b'server available on default port 80', result.stdout)
+
+    def python_stub(self):
+        self.stub('python3', '#!' + sys.executable + '''
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location('fixture_rc_local', sys.argv[-1])
+helper = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(helper)
+configure = helper.configure
+helper.configure = lambda: configure(os.environ['FIXTURE'])
+sys.exit(helper.main())
+''')
+
+    def test_shell_external_and_invalid_modes_never_call_firewall(self):
+        self.stub('sudo', '#!/bin/sh\nprintf "%s\\n" "$*" >> "$SUDO_CALLS"\nexec "$@"\n')
+        self.python_stub()
+        self.firewall_stub()
+        script = str(ROOT / 'scripts/iptables_conf.sh')
+        original = EXTERNAL_CANDIDATE.replace('\n', '\n' + rc.EXTERNAL + '\n', 1)
+        for content, success in ((original, True), (EXTERNAL_CANDIDATE, False),
+                                 (original + rc.EXTERNAL + '\n', False),
+                                 (original + rc.RULES[0] + '\n', False)):
+            with self.subTest(content=content):
+                self.put(content)
+                before = (self.path.read_bytes(), rc.identity(self.path.stat()))
+                sudo_calls = self.root / 'sudo-calls'
+                sudo_calls.write_text('')
+                result = subprocess.run(['bash', script], env=self.environment(SUDO_CALLS=str(sudo_calls)),
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+                self.assertFalse((self.root / 'calls').exists())
+                self.assertEqual(len(sudo_calls.read_text().splitlines()), 1)
+                self.assertEqual((self.path.read_bytes(), rc.identity(self.path.stat())), before)
+                self.assertEqual(self.backups(), [])
+                self.assertFalse(Path(str(self.path) + '.iptables1_saved').exists())
+                self.assertNotIn(b'server available', result.stdout)
+                if success:
+                    self.assertIn(b'externally managed', result.stdout)
+                    self.assertIn(b"operator's responsibility", result.stdout)
+        for output in ('', 'unexpected', 'external\\nmanaged'):
+            self.stub('python3', '#!/bin/sh\nprintf "' + output + '\\n"\n')
+            result = subprocess.run(['bash', script], env=self.environment(SUDO_CALLS=str(sudo_calls)),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'Invalid forwarding mode', result.stderr)
+            self.assertFalse((self.root / 'calls').exists())
 
     def test_persistent_shell_isolates_state_and_propagates_firewall_failures(self):
         self.firewall_stub()

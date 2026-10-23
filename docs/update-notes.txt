@@ -5,6 +5,11 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+UNRELEASED
+1. Explicit external port-forwarding ownership added through the exact rc.local
+   comment '# RHIM PORT FORWARDING: external'. RHIM leaves persistence and live
+   firewall rules untouched in this mode; the operator owns reachability.
+
 7a.450.36
 1. RotorHazard 4.5.0 (stable) release installation and update support added.
    Beta target and node firmware API level 36 remain unchanged.

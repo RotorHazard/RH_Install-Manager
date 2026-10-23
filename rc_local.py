@@ -11,6 +11,7 @@ import tempfile
 
 BEGIN = '# BEGIN RHIM PORT FORWARDING'
 END = '# END RHIM PORT FORWARDING'
+EXTERNAL = '# RHIM PORT FORWARDING: external'
 RULES = tuple('iptables -A PREROUTING -t nat -p tcp --dport {} -j REDIRECT --to-ports {}'.format(a, b)
               for a, b in ((80, 5000), (8080, 80)))
 HEADERS = ('# [Port Forwarding - RH_Install-Manager]',
@@ -45,7 +46,10 @@ MANUAL = ('Automatic rc.local configuration refused. Review /etc/rc.local manual
           'or functions. Verify syntax with the interpreter named in your script header. '
           'A subsequent run accepts this exact block without editing other commands; it does not '
           'verify startup reachability or application health. Until forwarding is configured, '
-          'use server port 5000.\n' + BLOCK)
+          'use server port 5000. If you manage forwarding externally, use the exact standalone '
+          'comment "' + EXTERNAL + '" instead, with no active historical RHIM rules or managed '
+          'block. RHIM then leaves persistence and live firewall rules untouched; you own '
+          'configuration and reachability.\n' + BLOCK)
 
 
 class ConfigError(Exception):
@@ -57,6 +61,7 @@ def refuse(reason):
 
 
 def render(content):
+    """Return managed content, or None for explicit external ownership."""
     if '\x00' in content:
         refuse('rc.local contains a NUL byte.')
     if '\r' in content:
@@ -68,6 +73,15 @@ def render(content):
         refuse('Unsupported shell header.')
     marked = [i for i, line in enumerate(lines)
               if 'BEGIN RHIM' in line or 'END RHIM' in line]
+    directives = [line.rstrip('\n') for line in lines
+                  if re.match(r'^\s*#?\s*RHIM\s+PORT\s+FORWARDING\b', line, re.IGNORECASE)]
+    if directives:
+        if directives != [EXTERNAL]:
+            refuse('Invalid or duplicate RHIM port forwarding directive.')
+        historical = RULES + tuple('sudo ' + rule for rule in RULES)
+        if marked or any(line.strip() in historical for line in lines):
+            refuse('External forwarding conflicts with active RHIM rules or managed markers.')
+        return None
     insertion = None
     if marked:
         if (len(marked) != 2 or lines[marked[0]].rstrip('\n') != BEGIN or
@@ -180,16 +194,23 @@ def write_file(fd, content, info, mode):
 
 
 def validate(path='/etc/rc.local'):
+    """Return snapshot and desired bytes; desired is None for external ownership."""
     info, content = snapshot(path)
     try:
-        desired = render('' if content is None else content.decode('utf-8')).encode('utf-8')
+        desired = render('' if content is None else content.decode('utf-8'))
+        if desired is not None:
+            desired = desired.encode('utf-8')
     except UnicodeError:
         refuse('rc.local is not UTF-8 text.')
     return info, content, desired
 
 
 def configure(path='/etc/rc.local'):
+    """Return True if rewritten, False if managed unchanged, None if external."""
     info, content, desired = validate(path)
+    if desired is None:
+        verify(path, info, content)
+        return None
     mode = (stat.S_IMODE(info.st_mode) if info is not None else 0o755) | 0o111
     if desired == content:
         verify(path, info, content)
@@ -236,12 +257,13 @@ def configure(path='/etc/rc.local'):
 
 def main():
     try:
-        configure()
+        mode = 'external' if configure() is None else 'managed'
     except (ConfigError, OSError) as error:
         print('Port forwarding persistence failed: {}'.format(error), file=sys.stderr)
         if not isinstance(error, ConfigError):
             print(MANUAL, file=sys.stderr)
         return 1
+    print(mode)
     return 0
 
 
