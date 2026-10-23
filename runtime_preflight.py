@@ -125,6 +125,10 @@ def check_runtime(user, target, stage, confirm=None):
         raise ValueError("Unsupported systemd manager environment. Review Python/loader overrides before retrying.")
     create_venv = not os.path.lexists(venv)
     if create_venv and (stage != "part1" or existing or not missing):
+        if not existing and not missing:
+            raise ValueError("RotorHazard source and venv are missing, but leftover rotorhazard.service is still loaded. "
+                             "Review the service and runtime manually and verify whether the unit is still in use before making changes; "
+                             "the venv will not be recreated.")
         raise ValueError("RotorHazard venv is missing. Restore it or plan an explicit runtime migration; it will not be recreated.")
     executable = "/usr/bin/python3" if create_venv else python
     # A new base needs venv support, not pip; an existing runtime must have pip.

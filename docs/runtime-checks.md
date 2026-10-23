@@ -69,6 +69,10 @@ Part 1 may validate `/usr/bin/python3` and the venv module and create the intend
 `/home/USER/.venv` if neither the tree nor service nor venv exists. Existing venv
 paths, including broken paths or symlinks, are never recreated. An existing
 venv must pass the interpreter identity and pip checks, even for part 1.
+If both source and venv are absent but `rotorhazard.service` remains loaded,
+RHIM identifies the leftover unit and refuses to recreate the venv. Review the
+service and runtime manually and verify whether the unit is still in use before
+making changes.
 Part 2 always requires the working venv and pip, including after reboot.
 An environment resolving inside the RotorHazard source tree is refused because
 replacing that tree would also remove access to the interpreter.

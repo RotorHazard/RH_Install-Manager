@@ -136,6 +136,27 @@ class RuntimeTests(RuntimeFixture):
         with self.assertRaisesRegex(ValueError, "venv is missing"):
             self.check(stage="part2")
 
+    def test_loaded_leftover_service_without_source_or_venv_refuses_before_probe(self):
+        self.existing = False
+        self.venv = False
+        for stage in ("part1", "part2", "update"):
+            with self.subTest(stage=stage):
+                self.commands.clear()
+                with self.assertRaisesRegex(ValueError, "leftover rotorhazard.service is still loaded") as error:
+                    self.check(stage=stage)
+                self.assertIn("Review the service and runtime manually", str(error.exception))
+                self.assertIn("verify whether the unit is still in use", str(error.exception))
+                self.assertIn("will not be recreated", str(error.exception))
+                self.assertTrue(all(command[0] == "systemctl" and command[1] in ("show", "show-environment")
+                                    for command in self.commands))
+
+    def test_existing_source_without_venv_keeps_generic_diagnosis(self):
+        self.venv = False
+        with self.assertRaisesRegex(ValueError, "RotorHazard venv is missing") as error:
+            self.check(stage="part1")
+        self.assertNotIn("leftover", str(error.exception))
+        self.assertTrue(all(command[0] == "systemctl" for command in self.commands))
+
     def test_fresh_part1_validates_base_without_pip(self):
         self.fresh()
         self.venv = False
@@ -458,6 +479,15 @@ class CoordinatorTests(RuntimeFixture):
                 install = self.coordinator("installation", marker=marker)
                 install(True, self.config, "", quick)
                 self.assert_denied()
+
+    def test_leftover_service_blocks_installation_without_effects_or_probe(self):
+        self.existing = False
+        self.venv = False
+        install = self.coordinator("installation")
+        self.assertFalse(install(True, self.config, "", 1))
+        self.assert_denied()
+        self.assertIn("leftover rotorhazard.service is still loaded", self.output.getvalue())
+        self.assertTrue(all(command[0] == "systemctl" for command in self.commands))
 
     def test_debug_mode_cannot_bypass_denial(self):
         self.version = [3, 9, 2]
