@@ -5,6 +5,10 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a2.450.36
+1. Installation and update progress messages improved.
+2. PR version and release notes requirements documented.
+
 7a1.450.36
 1. Explicit external port-forwarding ownership added through the exact rc.local
    comment '# RHIM PORT FORWARDING: external'. RHIM leaves persistence and live

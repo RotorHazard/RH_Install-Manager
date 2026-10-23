@@ -32,6 +32,9 @@ itself.
   stable and beta targets independent; main and custom remain separate choices.
 - `docs/update-notes.txt` is release history. Add relevant entries without
   rewriting version references in older entries.
+- Every PR must bump the RHIM version in `version.txt` and add a short entry
+  to `docs/update-notes.txt`, following the existing format. Follow-up commits
+  within the same PR keep that version and update its entry.
 
 ## Development conventions
 
