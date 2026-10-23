@@ -374,15 +374,18 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
         sleep(2)
         return False
     else:
-        target = check_preferred_rh_version(config)[0]
         stage = "part2" if first_part_of_installation_done_flag else "part1"
         print("\nChecking RotorHazard environment...")
         try:
             pending = read_state("/home/" + config.user)
             if pending:
-                if pending["stage"] != stage or pending["target"] != target:
+                if pending["stage"] != stage:
                     raise ValueError("Recovery is pending. Retry {} for {} first.".format(pending["stage"], pending["target"]))
+                target = pending["target"]
+                print("Resuming pending {} to {}.".format(stage, target))
                 check_activation("/home/" + config.user, pending)
+            else:
+                target = check_preferred_rh_version(config)[0]
             runtime = check_runtime(config.user, target, stage, confirm=input)
         except ValueError as error:
             show_runtime_error("Installation not started: " + str(error))

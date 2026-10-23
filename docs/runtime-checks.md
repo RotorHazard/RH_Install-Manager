@@ -9,9 +9,10 @@ and [4.5 setup instructions](https://github.com/RotorHazard/RotorHazard/blob/v4.
 Before either installation stage or an update, RHIM checks the actual runtime.
 Updates check the final source after the offer to switch to stable. NuclearHazard
 uses the same coordinator, including explicit part 1 and part 2 requests.
-An unfinished update resumes its recorded target, including a one-time switch
-to stable, without changing the configured source channel. Interrupted source
-switches still require manual recovery before an update can continue.
+An unfinished installation stage or update resumes its recorded target without
+changing the configured source channel, even if stable metadata changes. This
+also preserves a one-time update switch to stable. Interrupted source switches
+still require manual recovery before the operation can continue.
 Markers and debug mode cannot skip these checks. A refused check reports
 "Installation not started" or "RH update not started" before stopping the
 service, changing stage markers, configuring the host or running the operation's

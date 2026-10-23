@@ -523,6 +523,46 @@ class CoordinatorTests(RuntimeFixture):
                 self.effects.end_update.assert_called_once()
                 self.assertIn("Resuming pending update to v4.5.0.", self.output.getvalue())
 
+    def test_pending_part2_uses_recorded_target_for_each_channel_and_entry(self):
+        for channel in ("stable", "main", "beta", "feature/custom-rh"):
+            for quick in (False, 2):
+                with self.subTest(channel=channel, quick=quick):
+                    install = self.coordinator("installation", marker=True)
+                    self.config.rh_version = channel
+                    self.pending_source = {"stage": "part2", "target": "v4.5.0", "phase": "activated"}
+                    runtime = Mock(wraps=preflight.check_runtime)
+                    choice = Mock(return_value=("v4.6.0", "460", "v4.6.0"))
+                    with patch.dict(install.__globals__, check_runtime=runtime, check_preferred_rh_version=choice):
+                        self.assertTrue(install(False, self.config, "git", quick))
+                    self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+                    runtime.assert_called_once_with(USER, "v4.5.0", "part2", confirm=self.inputs)
+                    self.assertEqual(shlex.split(self.effects.system.call_args[0][0])[1:],
+                                     [USER, "v4.5.0", "git", PYTHON])
+                    self.assertEqual(self.config.rh_version, channel)
+                    choice.assert_not_called()
+                    self.inputs.assert_called_once_with("\n\n\npress Enter to continue")
+                    self.assertIn("Resuming pending part2 to v4.5.0.", self.output.getvalue())
+
+    def test_pending_install_wrong_stage_or_switch_refuses_before_effects(self):
+        for stage, phase in (("part2", "switching"), ("update", "activated")):
+            with self.subTest(stage=stage, phase=phase):
+                install = self.coordinator("installation", marker=True)
+                self.config.rh_version = "main"
+                self.pending_source = {"stage": stage, "target": "v4.5.0", "phase": phase}
+                self.effects.activation.side_effect = ValueError("Interrupted source switch; manual recovery required")
+                choice = Mock(side_effect=AssertionError("Pending recovery already has a target"))
+                with patch.dict(install.__globals__, check_preferred_rh_version=choice):
+                    self.assertFalse(install(False, self.config, "", 2))
+                if stage == "part2":
+                    self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+                else:
+                    self.effects.activation.assert_not_called()
+                    self.assertIn("Retry update for v4.5.0 first", self.output.getvalue())
+                choice.assert_not_called()
+                self.assertEqual(self.commands, [])
+                self.assertEqual(self.config.rh_version, "main")
+                self.assert_denied()
+
     def test_pending_update_switch_and_other_stage_refuse_without_effects(self):
         for stage, phase in (("update", "switching"), ("part2", "activated")):
             with self.subTest(stage=stage, phase=phase):
