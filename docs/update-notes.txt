@@ -6,6 +6,8 @@
         ^^^^^^^^^^^^
 
 UNRELEASED
+Stable RotorHazard installation and update target: 4.5.0.
+
 1. Prepare and validate selected RotorHazard Git/ZIP source before host changes;
    default ZIP bootstrap no longer requires wget or unzip.
 2. Back up the actual stopped source/data, including WAL, plugins and images.
