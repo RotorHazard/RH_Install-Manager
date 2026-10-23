@@ -404,8 +404,11 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
             sleep(1)
             clear_the_screen()
-            print(f"\n\n\t{Bcolors.BOLD}Installation process has been started - please wait...{Bcolors.ENDC}")
-            print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
+            print(f"\n    {Bcolors.BOLD}Installation process has been started - please wait...{Bcolors.ENDC}")
+            print("\n    This process may take several minutes,\n"
+                  "    or longer on slower systems or connections.\n"
+                  "    Some steps may remain quiet for several minutes.\n"
+                  "    Please do not interrupt.\n", flush=True)
             if conf_allowed:
                 if not config.debug_mode:
                     status = os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh all")
@@ -438,8 +441,11 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             sleep(2)
             clear_the_screen()
             print(
-                f"\n\n\t{Bcolors.BOLD}Second part of installation has been started - please wait...{Bcolors.ENDC}")
-            print(f"\n\n\t{Bcolors.BOLD}(please don't interrupt - it may take some time){Bcolors.ENDC}\n\n\n")
+                f"\n    {Bcolors.BOLD}Second part of installation has been started - please wait...{Bcolors.ENDC}")
+            print("\n    This process may take several minutes,\n"
+                  "    or longer on slower systems or connections.\n"
+                  "    Some steps may remain quiet for several minutes.\n"
+                  "    Please do not interrupt.\n", flush=True)
             if not run_runtime_script(config.user, target, git_flag, "part2", runtime):
                 return False
             rhim_config.second_part_of_install = True
@@ -547,9 +553,11 @@ def update(config, git_flag):
                 return False
             clear_the_screen()
             show_runtime_result(runtime)
-            print(f"\n\n\t{Bcolors.BOLD}Updating existing installation - please wait...{Bcolors.ENDC}")
-            print(f"\n\n\t{Bcolors.BOLD}This update may take several minutes, or longer on slower systems.\n"
-                  f"\tSome steps produce no output. Please do not interrupt.{Bcolors.ENDC}\n\n\n", flush=True)
+            print(f"\n    {Bcolors.BOLD}Updating existing installation - please wait...{Bcolors.ENDC}")
+            print("\n    This process may take several minutes,\n"
+                  "    or longer on slower systems or connections.\n"
+                  "    Some steps may remain quiet for several minutes.\n"
+                  "    Please do not interrupt.\n", flush=True)
             if not run_runtime_script(config.user, preferred_rh_version, git_flag, "update", runtime):
                 return False
             config_soft, config_flag = check_rotorhazard_config_status(config)
