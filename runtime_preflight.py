@@ -79,6 +79,7 @@ def check_runtime(user, target, stage, confirm=None):
     properties = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
     missing = properties.get("LoadState") == "not-found"
     fresh_install = missing and not existing
+    pending_daemon_reload = False
     if missing:
         if existing and stage != "update":
             fresh_install = pending_fresh_install(user)
@@ -92,7 +93,16 @@ def check_runtime(user, target, stage, confirm=None):
         if any(key not in properties for key in REQUIRED_PROPERTIES):
             raise ValueError("Incomplete systemd runtime properties. Review the service on a supported systemd host.")
         if properties["NeedDaemonReload"] != "no":
-            raise ValueError("RotorHazard unit has pending changes. Review and reload systemd explicitly before retrying.")
+            # Only our verified fresh activation can request a reload before repeating this guard.
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from source_safety import read_state, check_activation
+            state = read_state(home) if stage == "part2" else None
+            if (properties["NeedDaemonReload"] != "yes" or not state
+                    or state.get("stage") != stage or state.get("target") != target
+                    or state.get("phase") != "activated" or state.get("fresh_install") is not True):
+                raise ValueError("RotorHazard unit has pending changes. Review the unit and drop-ins, run sudo systemctl daemon-reload, then retry the same RHIM operation.")
+            check_activation(home, state)
+            pending_daemon_reload = True
         if properties["User"] != user or properties.get("Group", "") not in ("", primary_group):
             raise ValueError("Unsupported service user/group. Migrate explicitly to the standard RHIM account layout.")
         if properties["WorkingDirectory"] != directory:
@@ -154,7 +164,7 @@ def check_runtime(user, target, stage, confirm=None):
             raise ValueError("Unknown target requirements were not accepted. Select a known release or confirm this operation explicitly.")
     return {"python": python, "base_python": executable, "create_venv": create_venv,
             "service_present": not missing, "unknown_target": not known, "version": version,
-            "fresh_install": fresh_install}
+            "fresh_install": fresh_install, "pending_daemon_reload": pending_daemon_reload}
 
 
 def main(argv=None):
@@ -170,6 +180,8 @@ def main(argv=None):
     try:
         result = check_runtime(args.user, args.target, args.stage,
                                (lambda prompt: "yes") if args.accept_unknown else None)
+        if result.get("pending_daemon_reload"):
+            raise ValueError("Pending activation needs a daemon reload. Retry the same RHIM operation so the source engine can reload and repeat all runtime checks.")
         expected = result["base_python"] if args.stage == "part1" else result["python"]
         if args.python != expected:
             raise ValueError("Interpreter argument differs from the validated runtime. Restart the operation in RHIM.")

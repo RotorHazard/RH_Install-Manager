@@ -3,6 +3,7 @@ import os
 import sys
 from shlex import quote
 from runtime_preflight import check_runtime
+from source_safety import locked_operation, config_path, apply_config_file, cleanup_old, read_state, check_activation
 from pathlib import Path
 from time import sleep
 from conf_wizard_rh import conf_rh
@@ -90,7 +91,11 @@ def rh_update_check(config):
 
 
 def check_rotorhazard_config_status(config):
-    if os.path.exists(f"/home/{config.user}/RotorHazard/src/server/config.json"):
+    try:
+        path = config_path("/home/" + config.user)
+    except (OSError, ValueError) as error:
+        return "Data path unresolved: " + str(error), False
+    if os.path.exists(path):
         config_soft = f"{Bcolors.GREEN}-> configured{Bcolors.ENDC} 👍"
         config_flag = True
     else:
@@ -131,7 +136,7 @@ def end_update(config, server_configured_flag, server_installed_flag):
 
                 s - Start RotorHazard server now {clearing_color}
 
-                o - Clear old RotorHazard installations{Bcolors.YELLOW}
+                o - Review retained RotorHazard backups{Bcolors.YELLOW}
 
                 e - Exit now{Bcolors.ENDC}""")
         selection = completion_input()
@@ -147,14 +152,12 @@ def end_update(config, server_configured_flag, server_installed_flag):
             if not server_start():
                 return False
         elif selection == 'o':
-            if os.system("rm -rf ~/RotorHazard_*") != 0:
-                show_runtime_error("Old RotorHazard installation cleanup failed. Check the remaining directories.")
+            try:
+                cleanup_old("/home/" + config.user)
+            except (OSError, ValueError) as error:
+                show_runtime_error("Cleanup refused: " + str(error))
                 return False
-            if old_installations_were_found:
-                print("\n\t\t -- old RH installations cleaned --")
-            else:
-                print("\n\t\t -- no more old RH installations --")
-            sleep(2)
+            completion_input("Press Enter after reviewing retained paths.")
             clear_the_screen()
         elif selection == 'c':
             try:
@@ -199,9 +202,11 @@ def end_quick_installation(config):
     rhim_prompt = (f"""{Bcolors.GREEN}\n
         If you want to adjust any additional features like LEDs etc.
         please open Install-Manager by typing '{Bcolors.ENDC}rhim{Bcolors.GREEN}'. {Bcolors.ENDC}\n\n""")
-    if os.system(f"cp /home/{config.user}/RH_Install-Manager/NuclearHazard/nh-rh-config.json "
-                 f"/home/{config.user}/RotorHazard/src/server/config.json") != 0:
-        show_runtime_error("Could not apply NuclearHazard server configuration. Retry configuration before starting.")
+    try:
+        apply_config_file("/home/" + config.user,
+                          "/home/{}/RH_Install-Manager/NuclearHazard/nh-rh-config.json".format(config.user))
+    except (OSError, ValueError) as error:
+        show_runtime_error("Could not apply NuclearHazard server configuration: " + str(error))
         return False
     if os.system("cp ~/RH_Install-Manager/NuclearHazard/nh-updater-config.json ~/RH_Install-Manager/updater-config.json") != 0:
         show_runtime_error("Could not apply NuclearHazard installer configuration. Retry configuration.")
@@ -276,6 +281,7 @@ def run_runtime_script(user, target, git_flag, stage, runtime):
     return True
 
 
+@locked_operation
 def installation(conf_allowed, config, git_flag, quick_install=False, restart=False):
     def first_part_of_installation_done_check(config):
         rhim_config = load_rhim_sys_markers(config.user)
@@ -372,15 +378,19 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
         stage = "part2" if first_part_of_installation_done_flag else "part1"
         print("\nChecking RotorHazard environment...")
         try:
+            pending = read_state("/home/" + config.user)
+            if pending:
+                if pending["stage"] != stage or pending["target"] != target:
+                    raise ValueError("Recovery is pending. Retry {} for {} first.".format(pending["stage"], pending["target"]))
+                check_activation("/home/" + config.user, pending)
             runtime = check_runtime(config.user, target, stage, confirm=input)
         except ValueError as error:
             show_runtime_error("Installation not started: " + str(error))
             return False
-        if runtime["service_present"] and os.system("sudo systemctl stop rotorhazard") != 0:
-            show_runtime_error("Installation not started: could not stop RotorHazard. Check the service and retry.")
-            return False
         show_runtime_result(runtime)
         if not first_part_of_installation_done_flag:
+            if not run_runtime_script(config.user, target, git_flag, "part1", runtime):
+                return False
             if quick_install == 1:
                 if os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh shutdown_pin 19 2500") != 0:
                     show_runtime_error("Shutdown pin configuration failed. Review the error before retrying.")
@@ -404,8 +414,6 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
                     show_runtime_error("Host configuration failed. No completion was recorded. Review the error before retrying.")
                     return False
             # UART enabling added here so user won't have to reboot Pi again after doing it in Features Menu
-            if not run_runtime_script(config.user, target, git_flag, "part1", runtime):
-                return False
             rhim_config.first_part_of_install = True
             rhim_config.second_part_of_install = False
             if conf_allowed and not config.debug_mode:
@@ -446,6 +454,7 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             return end_normal_installation()
 
 
+@locked_operation
 def update(config, git_flag):
     clear_the_screen()
     internet_flag = internet_check()
@@ -456,7 +465,7 @@ def update(config, git_flag):
     else:
         print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
         sleep(2)
-        if not os.path.exists(f"/home/{config.user}/RotorHazard"):
+        if not os.path.exists(f"/home/{config.user}/RotorHazard") and not read_state("/home/" + config.user):
             print(f"""{Bcolors.BOLD}
 
     No RotorHazard server installation found. 
@@ -518,12 +527,14 @@ def update(config, git_flag):
                     preferred_rh_version = check_preferred_rh_version(config)[2]
             print("\nChecking RotorHazard environment...")
             try:
+                pending = read_state("/home/" + config.user)
+                if pending:
+                    if pending["stage"] != "update" or pending["target"] != preferred_rh_version:
+                        raise ValueError("Recovery is pending. Retry {} for {} first.".format(pending["stage"], pending["target"]))
+                    check_activation("/home/" + config.user, pending)
                 runtime = check_runtime(config.user, preferred_rh_version, "update", confirm=input)
             except ValueError as error:
                 show_runtime_error("RH update not started: " + str(error))
-                return False
-            if os.system("sudo systemctl stop rotorhazard") != 0:
-                show_runtime_error("RH update not started: could not stop RotorHazard. Check the service and retry.")
                 return False
             clear_the_screen()
             show_runtime_result(runtime)

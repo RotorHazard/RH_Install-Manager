@@ -350,6 +350,54 @@ class RuntimeTests(RuntimeFixture):
         self.assertEqual(preflight.main(["update", USER, "main", PYTHON, "--accept-unknown"]), 0)
 
 
+class PendingReloadTests(RuntimeFixture):
+    def test_reload_requires_verified_fresh_activated_state_and_keeps_other_guards(self):
+        self.properties["NeedDaemonReload"] = "yes"
+        state = {"stage": "part2", "target": "v4.5.0", "phase": "activated", "fresh_install": True}
+        with patch("source_safety.read_state", return_value=state), patch("source_safety.check_activation") as verify:
+            result = self.check(stage="part2")
+            verify.assert_called_once_with(HOME, state)
+            self.assertTrue(result["pending_daemon_reload"])
+            self.properties["ExecStart"] = EXEC.replace("server.py", "server.py --data /tmp/other")
+            with self.assertRaisesRegex(ValueError, "ExecStart"):
+                self.check(stage="part2")
+            self.properties["ExecStart"] = EXEC
+            self.properties["Environment"] = "PYTHONPATH=/tmp/other"
+            with self.assertRaisesRegex(ValueError, "environment"):
+                self.check(stage="part2")
+            self.properties["Environment"] = ""
+            self.manager_environment = "LD_PRELOAD=/tmp/other"
+            with self.assertRaisesRegex(ValueError, "manager environment"):
+                self.check(stage="part2")
+
+    def test_unproven_pending_state_never_allows_reload(self):
+        self.properties["NeedDaemonReload"] = "yes"
+        valid = {"stage": "part2", "target": "v4.5.0", "phase": "activated", "fresh_install": True}
+        invalid = [None] + [dict(valid, **change) for change in (
+            {"phase": "switching"}, {"fresh_install": False}, {"stage": "update"}, {"target": "main"})]
+        for state in invalid:
+            with self.subTest(state=state), patch("source_safety.read_state", return_value=state), patch("source_safety.check_activation") as verify:
+                with self.assertRaisesRegex(ValueError, "pending changes"):
+                    self.check(stage="part2")
+                verify.assert_not_called()
+        with patch("source_safety.read_state", return_value=valid), patch("source_safety.check_activation", side_effect=ValueError("identity changed")):
+            with self.assertRaisesRegex(ValueError, "identity changed"):
+                self.check(stage="part2")
+
+    def test_cli_does_not_treat_pending_reload_as_a_completed_guard(self):
+        self.properties["NeedDaemonReload"] = "yes"
+        state = {"stage": "part2", "target": "v4.5.0", "phase": "activated", "fresh_install": True}
+        with patch("source_safety.read_state", return_value=state), patch("source_safety.check_activation"):
+            self.assertEqual(preflight.main(["part2", USER, "v4.5.0", PYTHON]), 1)
+
+    def test_loaded_unit_is_checked_normally_after_reload(self):
+        self.properties["NeedDaemonReload"] = "no"
+        self.assertFalse(self.check(stage="part2")["pending_daemon_reload"])
+        self.properties["ExecStart"] = EXEC.replace("server.py", "server.py --data /tmp/other")
+        with self.assertRaisesRegex(ValueError, "ExecStart"):
+            self.check(stage="part2")
+
+
 class CoordinatorTests(RuntimeFixture):
     # Use the real check and script argument builder; every external effect is mocked.
     def coordinator(self, name, marker=False, replies=None, stable_offer=False):
@@ -364,7 +412,9 @@ class CoordinatorTests(RuntimeFixture):
         self.effects.end_update.return_value = True
         self.colors = SimpleNamespace(**dict.fromkeys(
             ("GREEN", "RED", "YELLOW", "ENDC", "BOLD", "BOLD_S", "GREEN_S", "ENDC_S", "UNDERLINE"), ""))
-        namespace = dict(os=SimpleNamespace(system=self.effects.system, path=SimpleNamespace(exists=lambda p: self.existing)),
+        namespace = dict(locked_operation=lambda function: function,
+                         read_state=lambda home: getattr(self, "pending_source", None),
+                         check_activation=self.effects.activation, os=SimpleNamespace(system=self.effects.system, path=SimpleNamespace(exists=lambda p: self.existing)),
                          Bcolors=self.colors, check_runtime=preflight.check_runtime,
                          load_rhim_sys_markers=lambda user: self.markers,
                          write_rhim_sys_markers=self.effects.markers, clear_the_screen=Mock(),
@@ -383,6 +433,15 @@ class CoordinatorTests(RuntimeFixture):
         namespace["completion_input"] = load_function("rpi_update.py", "completion_input", input=namespace["input"])
         self.inputs = namespace["input"]
         return load_function("rpi_update.py", name, **namespace)
+
+    def test_pending_switch_is_diagnosed_before_coordinator_runtime_check(self):
+        install = self.coordinator("installation", marker=True)
+        self.pending_source = {"stage": "part2", "target": "v4.5.0", "phase": "switching"}
+        self.effects.activation.side_effect = ValueError("Interrupted source switch; keep previous and prepared")
+        install(True, self.config, "", 0)
+        self.effects.activation.assert_called_once_with(HOME, self.pending_source)
+        self.assertEqual(self.commands, [])
+        self.assert_denied()
 
     def assert_denied(self):
         self.effects.system.assert_not_called()
@@ -426,8 +485,9 @@ class CoordinatorTests(RuntimeFixture):
         update = self.coordinator("update", stable_offer=True, replies=["y"])
         update(self.config, "")
         commands = [call.args[0] for call in self.effects.system.call_args_list]
-        self.assertEqual(commands[0], "sudo systemctl stop rotorhazard")
-        args = shlex.split(commands[1])
+        self.assertIn("/scripts/update_rh.sh", commands[0])
+        self.assertFalse(any("systemctl stop" in command for command in commands))
+        args = shlex.split(commands[0])
         self.assertEqual(args[1:], [USER, "v4.5.0", "", PYTHON])
         self.effects.end_update.assert_called_once()
         # If checking main before selection, the only answer would be consumed as unknown consent.
@@ -523,7 +583,7 @@ class CoordinatorTests(RuntimeFixture):
         self.effects.end1.assert_not_called()
         self.assertFalse(self.markers.first_part_of_install)
         self.assertFalse(hasattr(self.markers, "uart_support_added"))
-        self.assertFalse(any("install_rh_part" in call.args[0] for call in self.effects.system.call_args_list))
+        self.assertTrue(any("install_rh_part_1" in call.args[0] for call in self.effects.system.call_args_list))
 
     def test_restart_script_failure_preserves_completed_state(self):
         install = self.coordinator("installation", marker=True)
@@ -571,8 +631,28 @@ class CoordinatorTests(RuntimeFixture):
 
 
 class SyntaxTests(unittest.TestCase):
+    def test_isolated_cli_reports_pending_reload_without_import_traceback(self):
+        fixture = (ROOT / "tests/fixtures/systemctl_show_standard.txt").read_text()
+        fixture = fixture.replace("NeedDaemonReload=no", "NeedDaemonReload=yes")
+        code = """
+import runpy, sys
+from types import SimpleNamespace
+guard = runpy.run_path(sys.argv[1])["check_runtime"].__globals__
+guard["pwd"].getpwuid = lambda uid: SimpleNamespace(pw_name="pi", pw_gid=1000)
+guard["grp"].getgrgid = lambda gid: SimpleNamespace(gr_name="pi")
+guard["os"].path.lexists = lambda path: False
+guard["run"] = lambda argv: SimpleNamespace(returncode=0, stdout=sys.argv[2], stderr="")
+sys.exit(guard["main"](["update", "pi", "v4.5.0", "/home/pi/.venv/bin/python3"]))
+"""
+        result = subprocess.run([sys.executable, "-I", "-B", "-c", code,
+                                 str(ROOT / "runtime_preflight.py"), fixture],
+                                cwd="/tmp", capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pending changes", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_python36_syntax(self):
-        for filename in ("runtime_preflight.py", "rpi_update.py", "NuclearHazard/nh-quick-install.py", "NuclearHazard/nh-quick-update.py"):
+        for filename in ("runtime_preflight.py", "rpi_update.py", "NuclearHazard/nh-quick-install.py", "NuclearHazard/nh-quick-update.py", "source_safety.py"):
             ast.parse((ROOT / filename).read_text(), filename=filename, feature_version=(3, 6))
 
 

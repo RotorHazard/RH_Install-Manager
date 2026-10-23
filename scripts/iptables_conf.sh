@@ -1,10 +1,23 @@
 #!/bin/bash
 
-sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000 || { echo "Port 80 forwarding failed" >&2; exit 1; }
-sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80 || { echo "Port 8080 forwarding failed" >&2; exit 1; }
+ensure_forwarding_rule() {
+  local status
+  sudo iptables -C PREROUTING -t nat -p tcp --dport "$1" -j REDIRECT --to-ports "$2"
+  status=$?
+  if [ "$status" -eq 1 ]; then
+    sudo iptables -A PREROUTING -t nat -p tcp --dport "$1" -j REDIRECT --to-ports "$2" || return 1
+  elif [ "$status" -ne 0 ]; then
+    echo "Checking port $1 forwarding failed (status $status)" >&2
+    return 1
+  fi
+}
+
+ensure_forwarding_rule 80 5000 || { echo "Port 80 forwarding failed" >&2; exit 1; }
+ensure_forwarding_rule 8080 80 || { echo "Port 8080 forwarding failed" >&2; exit 1; }
 sudo iptables-save || { echo "Reading firewall rules failed" >&2; exit 1; }
 
-if [ -e /etc/rc.local ] || [ -L /etc/rc.local ]; then
+if { [ -e /etc/rc.local ] || [ -L /etc/rc.local ]; } &&
+   [ ! -e /etc/rc.local.iptables1_saved ] && [ ! -L /etc/rc.local.iptables1_saved ]; then
   sudo cp /etc/rc.local /etc/rc.local.iptables1_saved || { echo "rc.local backup failed" >&2; exit 1; }
 fi
 

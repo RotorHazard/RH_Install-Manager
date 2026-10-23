@@ -85,3 +85,43 @@ test environment.
 files and simulate `raspi-config` responses. It checks modern calls, the legacy
 combined call when a function is unavailable, and failures without a success
 message. It does not run the installer or touch actual boot settings.
+
+
+## Source and data safety coverage
+
+`test_source_safety.py` runs actual resolver, ZIP parser, copier, manifests,
+merge, rename, state and lock code against explicit temporary paths. It checks
+fresh/update/part-2 retry, ini precedence and relative/tilde paths, external and
+in-tree data, symlinks, WAL/SHM, custom plugins, images and backup directories,
+copy failures, disk-space injection, protected storage, collisions and interrupted
+activation. Pre-switch failures publish no pending state; retries after newer
+races or external-data changes must create a new backup. Activated retries keep
+current live data and skip source preparation, host/pip work, restoration and
+renames. Switching interruptions retain prepared/previous copies and report
+concrete manual recovery paths, including changed external data. Unknown FIFOs
+can be removed from live source and retried without editing state. Partial
+backup failures remove only the unpublished copy and permit a clean retry.
+Image conflicts keep custom bitmaps, retain new-only images, and keep new code. A real SQLite WAL fixture is opened only in its backup copy.
+Local Git fixtures check ref/checkout binding without network access. Mocked
+urllib response bytes feed the real ZIP reader with an empty PATH; the default
+ZIP bootstrap does not invoke wget/unzip, and download requests use timeout=60. FIFO
+backup runs under a subprocess deadline and verifies metadata, exclusion of
+stale lgpio state, refusal of unknown active FIFOs and other special files.
+Kernel-lock tests cover inherited descriptor reuse, contention, invalid flags
+and descriptors, exceptions and SIGKILL release.
+
+Operation tests retain actual filesystem behavior while replacing runtime,
+stop and package/service payload boundaries. Fresh pending-finalization cases
+inject daemon-reload failure, retain progress/recovery state and current races,
+then verify reload and a repeated guard before finalization. Runtime fixtures
+separately check the proven-state reload request and rejection of unknown
+service/runtime/environment overrides; this is not a real systemd reload test.
+An isolated Bash helper test uses a fake iptables boundary to verify repeated
+forwarding setup adds each rule once and propagates query/add failures. It does
+not execute the configuration script or access /etc. Writer-scan tests use synthetic
+`/proc` directories; they do not inspect host processes or run sudo/systemctl.
+No installer payload, package manager, downloaded code, service or hardware
+operation runs on macOS. No claim of Linux/Pi installation proof follows from
+this suite. See [source/data policy](../docs/source-data-safety.md) for copy and
+recovery limits. Production helpers retain Python 3.6 syntax/API choices;
+the unittest/CI environment still requires Python 3.10+.

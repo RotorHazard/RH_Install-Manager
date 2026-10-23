@@ -5,6 +5,21 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+UNRELEASED
+1. Prepare and validate selected RotorHazard Git/ZIP source before host changes;
+   default ZIP bootstrap no longer requires wget or unzip.
+2. Back up the actual stopped source/data, including WAL, plugins and images.
+   Keep verified unique backups for manual review; remove incomplete copies on
+   backup failure or report their exact retained path and errors.
+3. Publish pending state only at source switching. Pre-switch retries take new
+   backups; activated retries finalize setup without rewinding live user data.
+   Interrupted switches retain all recovery copies and require manual review.
+4. Preserve custom static/image contents on name conflicts and keep new images.
+5. Review retained paths with menu o. No wildcard cleanup is performed. Keep
+   pending recovery paths and the last verified backup. Recovery instructions
+   and cleanup limits are in docs/source-data-safety.md. Source copies do not
+   restore venv packages, host changes or later database migrations.
+
 6n4.440.36
 1. RotorHazard 4.5.0-beta.1 release installation and update support added.
 

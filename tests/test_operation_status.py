@@ -81,6 +81,8 @@ class CompletionTests(unittest.TestCase):
     def setUp(self):
         self.config = SimpleNamespace(user='pi')
         self.system = Mock(return_value=0)
+        self.apply_config = Mock()
+        self.cleanup = Mock(return_value=True)
         self.start = Mock(return_value=True)
         self.colors = SimpleNamespace(GREEN='', ENDC='', UNDERLINE='', YELLOW='')
         self.output = io.StringIO()
@@ -95,6 +97,7 @@ class CompletionTests(unittest.TestCase):
             'rpi_update.py', name, completion_input=completion_input, Bcolors=self.colors,
             os=SimpleNamespace(system=self.system, chdir=Mock()), sleep=Mock(),
             show_runtime_error=Mock(), server_start=self.start,
+            apply_config_file=self.apply_config, cleanup_old=self.cleanup,
             glob=SimpleNamespace(glob=lambda pattern: []), show_update_completed=lambda: 'Update completed',
             clear_the_screen=Mock(), conf_rh=Mock(return_value=True),
             check_rotorhazard_config_status=lambda config: ('', True))
@@ -134,23 +137,22 @@ class CompletionTests(unittest.TestCase):
             self.assertFalse(menu(self.config, False, True) if name == 'end_update' else menu())
 
     def test_quick_configuration_copy_failure_stops_before_next_effect(self):
-        for failure in (1, 2):
-            menu = self.menu('end_quick_installation', [])
-            self.system.reset_mock()
-            self.system.side_effect = [0] * (failure - 1) + [1]
-            self.assertFalse(menu(self.config))
-            self.assertEqual(self.system.call_count, failure)
+        menu = self.menu('end_quick_installation', [])
+        self.apply_config.side_effect = OSError('write denied')
+        self.assertFalse(menu(self.config))
+        self.system.assert_not_called()
         self.assertNotIn('Default NuclearHazard configuration applied', self.output.getvalue())
 
     def test_quick_wifi_failure_is_propagated(self):
         menu = self.menu('end_quick_installation', ['y'])
-        self.system.side_effect = [0, 0, 1]
+        self.system.side_effect = [0, 1]
         self.assertFalse(menu(self.config))
 
     def test_failed_reboot_or_cleanup_is_not_reported_as_success(self):
         for selection in ('r', 'o'):
             menu = self.menu('end_update', [selection])
             self.system.return_value = 1
+            self.cleanup.side_effect = ValueError("pending recovery")
             self.assertFalse(menu(self.config, True, True))
         self.assertNotIn('installations cleaned', self.output.getvalue())
 
