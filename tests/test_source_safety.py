@@ -21,6 +21,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import source_safety as safety
+import rc_local as rc
 
 
 class FilesystemCase(unittest.TestCase):
@@ -503,6 +504,11 @@ class OperationTests(FilesystemCase):
     def setUp(self):
         super().setUp()
         self.events = []
+        self.rc_path = Path(self.temp.name) / "rc.local"
+        validate = rc.validate
+        self.rc_guard = patch.object(rc, "validate", side_effect=lambda: validate(str(self.rc_path)))
+        self.rc_guard.start()
+        self.addCleanup(self.rc_guard.stop)
         self.runtime = {"base_python": "/fixture/python", "python": "/fixture/python", "service_present": True, "version": [3, 11, 2], "create_venv": False}
         self.guard = patch("runtime_preflight.check_runtime", side_effect=self.check_runtime)
         self.guard.start()
@@ -559,6 +565,73 @@ class OperationTests(FilesystemCase):
 
     def run_operation(self, stage="update", target="v4.5.0"):
         return safety.run_operation(str(self.home), stage, "fixture", target, "zip", "/fixture/python")
+
+    def unsupported_rc(self):
+        text = ("#!/bin/sh -e\n" + rc.HEADERS[0] + "\n" +
+                "\n".join(rc.RULES) + "\niptables-save\n" +
+                "python3 /home/pi/oled.py &\nexit 0\n")
+        self.rc_path.write_text(text)
+        self.rc_path.chmod(0o640)
+        return self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())
+
+    def test_unsupported_forwarding_refuses_before_source_or_host_effects(self):
+        self.legacy()
+        before = self.unsupported_rc()
+        source = safety.tree_manifest(str(self.source))
+        for stage in ("part2", "update"):
+            with self.subTest(stage=stage), patch.object(safety, "make_backup") as backup, patch.object(safety, "switch_source") as switch:
+                with self.assertRaisesRegex(safety.SafetyError, "Port forwarding layout check failed"):
+                    self.run_operation(stage)
+                backup.assert_not_called()
+                switch.assert_not_called()
+                self.assertEqual(set(self.events), {"runtime"})
+                self.assertIsNone(safety.read_state(str(self.home)))
+                self.assertEqual(safety.tree_manifest(str(self.source)), source)
+                self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
+                self.assertEqual(sorted(p.name for p in Path(self.temp.name).iterdir()), ["home", "rc.local"])
+
+    def test_activated_retry_checks_forwarding_before_stop_or_reload(self):
+        for stage in ("part2", "update"):
+            with self.subTest(stage=stage):
+                self.rc_path.unlink(missing_ok=True)
+                self.failure = "activate"
+                with self.assertRaisesRegex(safety.SafetyError, "injected activate"):
+                    self.run_operation(stage)
+                pending = Path(safety.state_path(str(self.home))).read_bytes()
+                self.unsupported_rc()
+                self.events.clear()
+                self.runtime["pending_daemon_reload"] = True
+                with self.assertRaisesRegex(safety.SafetyError, "layout check failed"):
+                    self.run_operation(stage)
+                self.assertEqual(self.events, ["runtime"])
+                self.assertEqual(Path(safety.state_path(str(self.home))).read_bytes(), pending)
+                Path(safety.state_path(str(self.home))).unlink()
+                self.runtime.pop("pending_daemon_reload")
+
+    def test_part1_does_not_check_or_configure_forwarding(self):
+        before = self.unsupported_rc()
+        self.run_operation("part1")
+        self.assertEqual((self.rc_path.read_bytes(), rc.identity(self.rc_path.stat())), before)
+        self.assertNotIn("activate", self.events)
+
+    def test_cli_forwarding_refusals_have_no_traceback_or_effects(self):
+        self.unsupported_rc()
+        for read_error in (False, True):
+            with self.subTest(read_error=read_error):
+                self.events.clear()
+                def execute(*args):
+                    return self.run_operation()
+                with patch.object(safety, "execute", side_effect=execute), patch.object(sys, "argv", ["source_safety.py", "update", "fixture", "v4.5.0", "zip", "/fixture/python"]):
+                    if read_error:
+                        with patch.object(rc, "snapshot", side_effect=PermissionError("fixture read denied")):
+                            self.assertEqual(safety.main(), 1)
+                    else:
+                        self.assertEqual(safety.main(), 1)
+                self.assertEqual(self.events, ["runtime"])
+                self.assertIsNone(safety.read_state(str(self.home)))
+                self.assertNotIn("Traceback", self.output.getvalue())
+        self.assertIn("fixture read denied", self.output.getvalue())
+        self.assertIn("Complex shell syntax", self.output.getvalue())
 
     def test_update_order_backup_completion_and_config_evidence(self):
         self.legacy()

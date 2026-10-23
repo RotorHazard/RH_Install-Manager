@@ -125,6 +125,11 @@ If service creation left a missing cached unit, the existing fresh-install
 marker permits the same checked service setup to run again. Other pending unit
 changes require explicit review and `sudo systemctl daemon-reload` before retry.
 Failed reload/enable/setup retains pending recovery and the fresh marker.
+Part 2 and updates check the current rc.local layout without editing it before
+service stop, backup, host package work or source preparation/switching, including
+activated retries. Part 1 does not check forwarding. The final configurator reads
+and validates rc.local again; the early check cannot guarantee later writes or
+firewall commands will succeed. Bootstrap package work can precede this check.
 Repeated port-forwarding setup checks before adding rules and preserves the
 first rc.local backup. The shared installer/update configurator preserves
 unrelated commands in supported simple `/etc/rc.local` scripts. It migrates

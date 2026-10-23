@@ -179,12 +179,17 @@ def write_file(fd, content, info, mode):
         os.fsync(stream.fileno())
 
 
-def configure(path='/etc/rc.local'):
+def validate(path='/etc/rc.local'):
     info, content = snapshot(path)
     try:
         desired = render('' if content is None else content.decode('utf-8')).encode('utf-8')
     except UnicodeError:
         refuse('rc.local is not UTF-8 text.')
+    return info, content, desired
+
+
+def configure(path='/etc/rc.local'):
+    info, content, desired = validate(path)
     mode = (stat.S_IMODE(info.st_mode) if info is not None else 0o755) | 0o111
     if desired == content:
         verify(path, info, content)

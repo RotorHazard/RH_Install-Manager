@@ -36,6 +36,30 @@ class RcLocalTests(unittest.TestCase):
     def backups(self):
         return list(self.root.glob('rc.local.rhim-backup-*'))
 
+    def test_precheck_is_readonly_for_missing_supported_and_manual_layouts(self):
+        missing = self.root / 'absent-directory/rc.local'
+        rc.validate(str(missing))
+        self.assertFalse(missing.parent.exists())
+        for content in tuple(path.read_text() for path in STOCK_FIXTURES) + (
+                        '#!/bin/sh\nexit 0\n', '#!/bin/sh\necho custom\nexit 0\n',
+                        '#!/bin/sh\n' + rc.HEADERS[0] + '\n' + '\n'.join(rc.RULES) + '\niptables-save\nexit 0\n',
+                        '#!/bin/sh\npython3 /home/pi/oled.py &\n' + rc.BLOCK + 'exit 0\n'):
+            with self.subTest(content=content):
+                self.put(content)
+                before = rc.identity(self.path.stat())
+                rc.validate(str(self.path))
+                self.assertEqual(rc.identity(self.path.stat()), before)
+                self.assertEqual(self.path.read_text(), content)
+                self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_configurator_revalidates_content_after_precheck(self):
+        self.put('#!/bin/sh\nexit 0\n')
+        rc.validate(str(self.path))
+        self.put('#!/bin/sh\npython3 /home/pi/oled.py &\nexit 0\n')
+        with self.assertRaises(rc.ConfigError):
+            self.configure()
+        self.assertEqual(self.backups(), [])
+
     def test_absent_creates_executable_posix_script_without_backup(self):
         self.assertTrue(self.configure())
         self.assertTrue(self.path.read_text().startswith('#!/bin/sh\n'))

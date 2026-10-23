@@ -664,6 +664,7 @@ def run_operation(home, stage, user, target, method, executable, accept_unknown=
     # Isolated CLI mode omits the script directory from sys.path.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from runtime_preflight import check_runtime
+    from rc_local import validate, ConfigError
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts",
                           {"part1": "install_rh_part_1.sh", "part2": "install_rh_part_2.sh", "update": "update_rh.sh"}[stage])
     with operation_lock(home) as fd:
@@ -676,6 +677,11 @@ def run_operation(home, stage, user, target, method, executable, accept_unknown=
         expected = runtime["base_python"] if stage == "part1" else runtime["python"]
         if executable != expected:
             raise SafetyError("Interpreter argument differs from validated runtime")
+        if stage != "part1":
+            try:
+                validate()
+            except (ConfigError, OSError) as error:
+                raise SafetyError("Port forwarding layout check failed. Review /etc/rc.local before retrying: {}".format(error)) from error
         if runtime.get("pending_daemon_reload"):
             command(["sudo", "systemctl", "daemon-reload"])
             runtime = check_runtime(user, target, stage, (lambda prompt: "yes") if accept_unknown else None)
