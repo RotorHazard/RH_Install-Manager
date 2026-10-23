@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Validate and persist before changing the running firewall.
+sudo python3 -I -B "$(dirname "$0")/../rc_local.py" || exit 1
+
 ensure_forwarding_rule() {
   local status
   sudo iptables -C PREROUTING -t nat -p tcp --dport "$1" -j REDIRECT --to-ports "$2"
@@ -14,25 +17,6 @@ ensure_forwarding_rule() {
 
 ensure_forwarding_rule 80 5000 || { echo "Port 80 forwarding failed" >&2; exit 1; }
 ensure_forwarding_rule 8080 80 || { echo "Port 8080 forwarding failed" >&2; exit 1; }
-sudo iptables-save || { echo "Reading firewall rules failed" >&2; exit 1; }
-
-if { [ -e /etc/rc.local ] || [ -L /etc/rc.local ]; } &&
-   [ ! -e /etc/rc.local.iptables1_saved ] && [ ! -L /etc/rc.local.iptables1_saved ]; then
-  sudo cp /etc/rc.local /etc/rc.local.iptables1_saved || { echo "rc.local backup failed" >&2; exit 1; }
-fi
-
-sudo tee /etc/rc.local > /dev/null << 'EOF' || { echo "Port forwarding configuration write failed" >&2; exit 1; }
-#!/bin/bash
-
-# [Port Forwarding – RH_Install-Manager]
-iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
-iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
-iptables-save
-
-exit 0
-EOF
-
-sudo chmod +x /etc/rc.local || { echo "rc.local permissions update failed" >&2; exit 1; }
 
 green="\033[92m"
 red="\033[91m"

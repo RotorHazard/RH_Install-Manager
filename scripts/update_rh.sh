@@ -24,9 +24,6 @@ cd /home/"${1}"/RH_Install-Manager/scripts/ || exit
 # Preflight accepts only an existing Python 3 venv service; legacy migration would invalidate that check.
 
 # port forwarding
-if ! grep -q "sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80" /etc/rc.local; then
-  cd /home/"${1}"/RH_Install-Manager/scripts/ || exit
-  sudo ./iptables_conf.sh || exit 1
-fi
+sudo ./iptables_conf.sh || exit 1
 
 cd /home/"${1}" || exit

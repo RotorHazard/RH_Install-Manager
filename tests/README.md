@@ -129,6 +129,15 @@ the unittest/CI environment still requires Python 3.10+.
 
 ## Recorded system verification
 
+Port-forwarding regression tests use temporary rc.local files and stubbed
+firewall commands. They check custom-command preservation, historical entries,
+repeat runs, current-content backups, refused layouts, concurrent edits and
+write failures. Pinned upstream Raspberry Pi OS rc.local fixtures exercise the
+stock IP-address display, and custom scripts exercise the manual-block path.
+The persistent POSIX shell block is also executed with stubs
+to check error propagation and isolation of shell variables and arguments.
+These tests do not prove root metadata handling or boot-time service execution.
+
 On 2026-10-23, the following checks were run separately from this unit suite.
 They describe the tested revisions and environments, not all supported systems.
 

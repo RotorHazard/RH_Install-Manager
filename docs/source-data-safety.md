@@ -126,7 +126,31 @@ marker permits the same checked service setup to run again. Other pending unit
 changes require explicit review and `sudo systemctl daemon-reload` before retry.
 Failed reload/enable/setup retains pending recovery and the fresh marker.
 Repeated port-forwarding setup checks before adding rules and preserves the
-first rc.local backup.
+first rc.local backup. The shared installer/update configurator preserves
+unrelated commands in supported simple `/etc/rc.local` scripts. It migrates
+exact historical RHIM forwarding entries into a managed block and saves the
+current file as `/etc/rc.local.rhim-backup-*` before each content change.
+Unchanged content is not rewritten or backed up again. The stock Raspberry Pi
+OS IP-address display fragment is preserved. Symlinks, special files, invalid
+managed blocks and unsupported automatic edits are refused before live firewall
+rules are changed. Backup, write and firewall errors remain stage failures;
+retry does not discard pending recovery.
+
+For a custom shell script that RHIM cannot edit safely, the refusal prints the
+complete current forwarding block. Preserve your own commands and place that
+block manually where startup will execute it, outside functions or conditions
+and before any terminating exit or exec. Check your script's syntax and startup
+behavior, then retry the same RHIM operation. Exactly one unchanged current
+block is accepted without editing the surrounding custom script; historical
+RHIM rules must not remain alongside it. RHIM does not prove that a manually
+placed block is reachable. A changed block in an unsupported custom layout
+requires manual review again.
+
+The file replacement and live firewall changes are separate operations. A
+failure can leave the persistent configuration written before all live rules
+have been applied. Inspect the reported error before retrying. Earlier RHIM
+versions could replace the whole file; this change cannot recover commands
+that are already absent. Review existing backups when recovering older edits.
 
 An interruption recorded as `switching` stops automatically with the exact
 recovery paths. This includes a crash between the two moves or after a rename

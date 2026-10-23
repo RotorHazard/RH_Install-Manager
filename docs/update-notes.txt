@@ -21,6 +21,11 @@ UNRELEASED
    restore venv packages, host changes or later database migrations.
 6. Resume an unfinished update using its recorded target, including a one-time
    switch to stable, without changing the configured source channel.
+7. Preserve unrelated commands in supported rc.local files during port setup.
+   Use one managed forwarding block and unique current-content backups; retain
+   the first historical backup. Refuse unsupported layouts before changing
+   live firewall rules. Commands lost in earlier versions need manual recovery
+   from an existing backup.
 
 6n4.440.36
 1. RotorHazard 4.5.0-beta.1 release installation and update support added.
