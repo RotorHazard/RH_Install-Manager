@@ -5,6 +5,24 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a.450.36
+1. RotorHazard 4.5.0 (stable) release installation and update support added.
+   Beta target and node firmware API level 36 remain unchanged.
+2. Python/runtime checks added before installation and updates. Existing
+   venvs are reused; nonstandard service layouts require manual migration.
+3. Source validation and backups of actual configuration, databases,
+   plugins and images added before replacing RotorHazard.
+4. Installation error reporting, progress markers and resume logic improved.
+   Pending installation stages and updates retain their recorded target
+   without restoring older data.
+5. Existing rc.local commands preserved in supported layouts during port
+   forwarding setup. Layouts are checked before part-2/update changes and
+   revalidated at final setup. Unsupported layouts require manual configuration.
+6. Automatic deletion of old installations replaced with manual backup review.
+   Backups do not roll back host packages or venv dependency changes.
+7. Automated tests and CI workflow added. Linux installation/update and
+   isolated ARM application checks documented.
+
 6n4.440.36
 1. RotorHazard 4.5.0-beta.1 release installation and update support added.
 

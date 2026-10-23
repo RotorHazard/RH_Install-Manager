@@ -18,8 +18,9 @@ def main():
     config = load_json(config_file)
     config.user = username
     write_json(config, config_file)
-    installation(True, config, False, passed_install_step)
+    result = installation(True, config, False, passed_install_step)
+    return 1 if result is False else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

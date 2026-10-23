@@ -1,25 +1,22 @@
 #!/bin/bash
 
-sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
-sudo iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
-sudo iptables-save
+# Validate and persist before changing the running firewall.
+sudo python3 -I -B "$(dirname "$0")/../rc_local.py" || exit 1
 
-sudo cp /etc/rc.local /etc/rc.local.iptables1_saved >/dev/null 2>&1
+ensure_forwarding_rule() {
+  local status
+  sudo iptables -C PREROUTING -t nat -p tcp --dport "$1" -j REDIRECT --to-ports "$2"
+  status=$?
+  if [ "$status" -eq 1 ]; then
+    sudo iptables -A PREROUTING -t nat -p tcp --dport "$1" -j REDIRECT --to-ports "$2" || return 1
+  elif [ "$status" -ne 0 ]; then
+    echo "Checking port $1 forwarding failed (status $status)" >&2
+    return 1
+  fi
+}
 
-sudo sed -i 's/exit 0//' /etc/rc.local >/dev/null 2>&1
-
-sudo tee /etc/rc.local > /dev/null << 'EOF'
-#!/bin/bash
-
-# [Port Forwarding – RH_Install-Manager]
-iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-ports 5000
-iptables -A PREROUTING -t nat -p tcp --dport 8080 -j REDIRECT --to-ports 80
-iptables-save
-
-exit 0
-EOF
-
-sudo chmod +x /etc/rc.local
+ensure_forwarding_rule 80 5000 || { echo "Port 80 forwarding failed" >&2; exit 1; }
+ensure_forwarding_rule 8080 80 || { echo "Port 8080 forwarding failed" >&2; exit 1; }
 
 green="\033[92m"
 red="\033[91m"
