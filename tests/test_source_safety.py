@@ -1,5 +1,6 @@
 """Real temporary filesystem checks; never execute installer payloads or systemd."""
 import contextlib
+import fcntl
 import io
 import json
 import os
@@ -909,6 +910,30 @@ class LockTests(FilesystemCase):
                     safety.inherited_lock(str(self.home))
         finally:
             os.close(wrong)
+
+    def test_unlocked_descriptor_for_correct_file_is_not_acquired_by_validation(self):
+        fd = safety.lock_file(str(self.home))
+        try:
+            with patch.dict(os.environ, {"RHIM_LOCK_FD": str(fd)}):
+                with self.assertRaisesRegex(safety.SafetyError, "does not hold"):
+                    safety.inherited_lock(str(self.home))
+            other = safety.lock_file(str(self.home))
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(other)
+        finally:
+            os.close(fd)
+
+    def test_another_holders_lock_does_not_validate_an_unlocked_descriptor(self):
+        with safety.operation_lock(str(self.home)):
+            fd = safety.lock_file(str(self.home))
+            try:
+                with patch.dict(os.environ, {"RHIM_LOCK_FD": str(fd)}):
+                    with self.assertRaisesRegex(safety.SafetyError, "Invalid inherited"):
+                        safety.inherited_lock(str(self.home))
+            finally:
+                os.close(fd)
 
     def test_failure_releases_lock(self):
         with self.assertRaises(RuntimeError):

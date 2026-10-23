@@ -121,10 +121,10 @@ def inherited_lock(home):
             wanted = os.fstat(expected)
             if fd == expected or (actual.st_dev, actual.st_ino) != (wanted.st_dev, wanted.st_ino):
                 raise SafetyError("Inherited lock does not name this operation lock")
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             try:
                 fcntl.flock(expected, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 return fd
             raise SafetyError("Inherited descriptor does not hold the operation lock")
         finally:
