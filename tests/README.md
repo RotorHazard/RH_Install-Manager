@@ -135,6 +135,18 @@ the unittest/CI environment still requires Python 3.10+.
 
 ## Operation regression coverage
 
+`test_self_update.py` runs the real Python coordinator and both Bash entry
+points with downloads supplied from local ZIP fixtures. A restricted PATH
+contains filesystem-command stubs that accept only paths inside the temporary
+fixture; privileged, service and process commands cannot reach the host.
+Downloaded Python code is parsed but never executed. Cases cover invalid
+archives, preparation/config-copy failures, failed activation, retained backups,
+literal branch arguments, relative config links after switching directories,
+update markers and success/failure propagation.
+This does not prove a real download or execution of the replacement application.
+The previous installation is retained under a unique directory in
+`~/.rhim_markers`; a power loss during replacement still needs manual inspection.
+
 `test_config_writes.py` checks real atomic config saves, serialization and
 storage failures, failed replacement and retry, formatting, permissions and
 symlink targets. `test_banner.py` checks one host query per banner and safe
