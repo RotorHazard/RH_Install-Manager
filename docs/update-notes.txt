@@ -5,6 +5,13 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a3.450.36
+1. Manager self-update prepares and validates the replacement before switching,
+   preserves local configuration and retains the previous installation.
+2. Configuration saves are atomic and preserve the previous file on failure.
+3. Host banner fallback and installation progress timing improved. Operation
+   regression tests and a narrow Python 3.6 compatibility check added to CI.
+
 7a2.450.36
 1. Installation and update progress messages improved.
 2. PR version and release notes requirements documented.
