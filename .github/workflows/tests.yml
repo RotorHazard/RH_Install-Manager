@@ -20,3 +20,9 @@ jobs:
           python-version: '3.10'
       - name: Unit tests and shell syntax
         run: python3 -m unittest discover -s tests -v
+      - name: Python 3.6 compatibility smoke
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm --network none -v "$PWD:/work:ro" -w /work \
+            python:3.6.15-slim-buster@sha256:d59ee182c4629dd33b240b9bac1a6ff44276e79e66117eba17aed4016845d3b2 \
+            python -B tests/python36_smoke.py

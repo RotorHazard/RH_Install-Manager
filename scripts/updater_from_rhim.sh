@@ -16,22 +16,19 @@ printf "\n\nSoftware will be automatically closed.\n"
 printf "\nWord 'Killed' may be shown.\n"
 printf "\nPlease wait...\n"
 sleep 1.2
-printf "\n\nEnter 'sudo' password if prompted.\n"
-sleep 1.2
-sudo echo
 printf "\n\nUpdating process has been started\n\n" &
 dots50
 printf "\n"
 for pid in $(pgrep -ax python3 | grep start_rhim.py | awk '{print $1}'); do kill -9 "$pid"; done
 for pid in $(pgrep -ax python3 | grep start_rhim.py | awk '{print $1}'); do kill -9 "$pid"; done # not a mistake - last line in rhim.sh
-cd ~ || exit
-rm -rf ~/.rhim_markers/old_RH_Install-Manager >/dev/null 2>&1
-cp -r ~/RH_Install-Manager ~/.rhim_markers/old_RH_Install-Manager
-cd ~/.rhim_markers/old_RH_Install-Manager || exit
-python3 ~/.rhim_markers/old_RH_Install-Manager/self_update.py
-cd ~ || exit
+cd "$HOME/RH_Install-Manager" || exit 1
+python3 "$HOME/RH_Install-Manager/self_update.py" || {
+  printf '\nUpdate failed. Review the error above before retrying.\n' >&2
+  exit 1
+}
+cd ~ || exit 1
 sleep 1.2
-cd ~/RH_Install-Manager || exit
+cd ~/RH_Install-Manager || exit 1
 printf "\n\n $green Update process done, please "$underline"re-enter$endc$green ~/RH_Install-Manager directory \n"
 printf "  by typing$endc 'cd ~/RH_Install-Manager'$green or just type$endc 'rhim'\n"
 printf "\n\n"

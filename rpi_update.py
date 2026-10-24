@@ -392,6 +392,14 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
             return False
         show_runtime_result(runtime)
         if not first_part_of_installation_done_flag:
+            print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
+            sleep(1)
+            clear_the_screen()
+            print(f"\n    {Bcolors.BOLD}Installation process has been started - please wait...{Bcolors.ENDC}")
+            print("\n    This process may take several minutes,\n"
+                  "    or longer on slower systems or connections.\n"
+                  "    Some steps may remain quiet for several minutes.\n"
+                  "    Please do not interrupt.\n", flush=True)
             if not run_runtime_script(config.user, target, git_flag, "part1", runtime):
                 return False
             if quick_install == 1:
@@ -401,14 +409,6 @@ def installation(conf_allowed, config, git_flag, quick_install=False, restart=Fa
                 if os.system("~/RH_Install-Manager/scripts/additional_sys_conf.sh led") != 0:
                     show_runtime_error("LED configuration failed. Review the error before retrying.")
                     return False
-            print(f"\n\t\t{Bcolors.GREEN}Internet connection - OK{Bcolors.ENDC}")
-            sleep(1)
-            clear_the_screen()
-            print(f"\n    {Bcolors.BOLD}Installation process has been started - please wait...{Bcolors.ENDC}")
-            print("\n    This process may take several minutes,\n"
-                  "    or longer on slower systems or connections.\n"
-                  "    Some steps may remain quiet for several minutes.\n"
-                  "    Please do not interrupt.\n", flush=True)
             if conf_allowed:
                 if not config.debug_mode:
                     status = os.system(f"/home/{config.user}/RH_Install-Manager/scripts/sys_conf.sh all")

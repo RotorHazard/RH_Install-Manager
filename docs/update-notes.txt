@@ -5,6 +5,12 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a3.450.36
+1. Safer manager self-updates with backups and preserved settings.
+2. Fixed configuration loss when saving fails.
+3. Improved host banner and installation progress messages.
+4. Added regression tests and Python 3.6 compatibility checks.
+
 7a2.450.36
 1. Installation and update progress messages improved.
 2. PR version and release notes requirements documented.

@@ -25,8 +25,14 @@ only a system PATH and `LC_ALL=C`. No repository shell script is executed.
 Ignored and untracked scripts are excluded. Track new scripts before expecting
 this check to include them.
 
-CI runs on Ubuntu and macOS with Python 3.10. This test requirement does not
-change RHIM's declared Python 3.6 runtime compatibility. These checks do not
+CI runs the full suite on Ubuntu and macOS with Python 3.10. A Linux-only
+Docker step runs `python36_smoke.py` in the digest-pinned official
+`python:3.6.15-slim-buster` image, with networking disabled and the checkout
+mounted read-only. It compiles runtime files and executes the config-save and
+banner fixtures on CPython 3.6. It does not install application dependencies
+or run application startup. The archived image is only a compatibility check.
+These test environments do not change RHIM's declared Python 3.6 runtime
+compatibility. These checks do not
 verify installation, updates, services, networking, firmware flashing or
 Raspberry Pi hardware. CI does not deploy anything.
 
@@ -126,6 +132,26 @@ operation runs on macOS. No claim of Linux/Pi installation proof follows from
 this suite. See [source/data policy](../docs/source-data-safety.md) for copy and
 recovery limits. Production helpers retain Python 3.6 syntax/API choices;
 the unittest/CI environment still requires Python 3.10+.
+
+## Operation regression coverage
+
+`test_self_update.py` runs the real Python coordinator and both Bash entry
+points with downloads supplied from local ZIP fixtures. A restricted PATH
+contains filesystem-command stubs that accept only paths inside the temporary
+fixture; privileged, service and process commands cannot reach the host.
+Downloaded Python code is parsed but never executed. Cases cover invalid
+archives, preparation/config-copy failures, failed activation, retained backups,
+literal branch arguments, relative config links after switching directories,
+update markers and success/failure propagation.
+This does not prove a real download or execution of the replacement application.
+The previous installation is retained under a unique directory in
+`~/.rhim_markers`; a power loss during replacement still needs manual inspection.
+
+`test_config_writes.py` checks real atomic config saves, serialization and
+storage failures, failed replacement and retry, formatting, permissions and
+symlink targets. `test_banner.py` checks one host query per banner and safe
+output when address lookup fails. Coordinator coverage checks that the wait
+message precedes the first installation script.
 
 ## Recorded system verification
 
