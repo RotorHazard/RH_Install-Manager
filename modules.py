@@ -305,11 +305,27 @@ quick wrapper around write json to normalize our parameters.
 
 
 def write_json(to_dump, file_name):
-    with open(file_name, 'w') as open_file:
-        if isinstance(to_dump, SimpleNamespace):
-            json.dump(vars(to_dump), open_file, indent=4)
-        else:
-            json.dump(to_dump, open_file, indent=4)
+    file_name = os.path.realpath(file_name)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=os.path.dirname(file_name),
+                                         delete=False) as open_file:
+            temporary = open_file.name
+            if os.path.exists(file_name):
+                os.fchmod(open_file.fileno(), os.stat(file_name).st_mode & 0o7777)
+            if isinstance(to_dump, SimpleNamespace):
+                json.dump(vars(to_dump), open_file, indent=4)
+            else:
+                json.dump(to_dump, open_file, indent=4)
+            open_file.flush()
+            os.fsync(open_file.fileno())
+        os.replace(temporary, file_name)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            try:
+                os.unlink(temporary)
+            except OSError as error:
+                print("Could not remove temporary config file {}: {}".format(temporary, error))
 
 
 '''
