@@ -1,19 +1,29 @@
 #!/bin/bash
 
-sudo rm /home/"$USER"/hotspot.sh >/dev/null 2>&1
+set -o pipefail
 
-echo
-echo "if iwgetid -r | grep -q .; then
+hotspot_error() {
+    echo "Hotspot configuration failed: $1" >&2
+    exit 1
+}
+
+[ "$#" -eq 2 ] || hotspot_error "Expected SSID and password arguments."
+
+hotspot_script="/home/$USER/hotspot.sh"
+sudo install -m 700 /dev/null "$hotspot_script" || hotspot_error "Cannot prepare hotspot script."
+{
+    printf '#!/bin/bash\n'
+    printf 'ssid=%q\npassword=%q\n' "$1" "$2"
+    cat <<'HOTSPOT'
+if iwgetid -r | grep -q .; then
     echo "Wi-Fi network found. Not creating a hotspot."
 else
-    nmcli dev wifi hotspot ifname wlan0 ssid "$1" password "$2"
-fi" | sudo tee -a /home/"$USER"/hotspot.sh
-sudo chmod +x /home/"$USER"/hotspot.sh
+    nmcli dev wifi hotspot ifname wlan0 ssid "$ssid" password "$password"
+fi
+HOTSPOT
+} | sudo tee "$hotspot_script" >/dev/null || hotspot_error "Cannot write hotspot script."
 
-sudo rm /etc/systemd/system/hotspot.service >/dev/null 2>&1
-
-echo "
-
+sudo tee /etc/systemd/system/hotspot.service >/dev/null <<SERVICE || hotspot_error "Cannot write hotspot service."
 [Unit]
 Description=Hotspot Service
 After=NetworkManager.service
@@ -26,15 +36,14 @@ ExecStart=sudo /home/$USER/hotspot.sh
 WorkingDirectory=/home/$USER/
 
 [Install]
-WantedBy=multi-user.target" | sudo tee -a /etc/systemd/system/hotspot.service
-sudo systemctl enable hotspot.service
+WantedBy=multi-user.target
+SERVICE
+sudo systemctl daemon-reload || hotspot_error "Cannot reload systemd services."
+sudo systemctl enable hotspot.service || hotspot_error "Cannot enable hotspot service."
 
 echo "
 
 
 --- Automatic NuclearHazard AccessPoint enabled ---
-
-SSID: $1
-PSWD: $2
 
 "

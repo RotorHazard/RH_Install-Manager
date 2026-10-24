@@ -5,6 +5,10 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a4.450.36
+1. Safer automatic hotspot setup and handling of Wi-Fi credentials.
+2. Fixed error reporting for node flashing, UART checks and resets.
+
 7a3.450.36
 1. Safer manager self-updates with backups and preserved settings.
 2. Fixed configuration loss when saving fails.

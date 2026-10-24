@@ -153,6 +153,20 @@ symlink targets. `test_banner.py` checks one host query per banner and safe
 output when address lookup fails. Coordinator coverage checks that the wait
 message precedes the first installation script.
 
+`test_hotspot_configuration.py` passes credentials to a harmless argument
+recorder, then executes the setup script with an allow-listed `sudo` replacement.
+The replacement maps every permitted output path into a temporary directory.
+Generated hotspot scripts run with fake Wi-Fi detection and `nmcli` functions.
+Tests cover spaces and shell metacharacters at both boundaries, setup failures,
+and saving `ap-config.json` only after setup succeeds. They do not prove actual
+NetworkManager or systemd behavior, or rollback after partial system changes.
+
+`test_nodes_flashing.py` loads production functions without hardware imports.
+Mocked bus libraries, GPIO and command results cover initialization and reset
+failures, bootloader retries, UART checks and single/series success reporting.
+These tests do not open an I2C bus or serial port, reset a physical node or
+execute `avrdude`.
+
 ## Recorded system verification
 
 Port-forwarding regression tests use temporary rc.local files and stubbed
