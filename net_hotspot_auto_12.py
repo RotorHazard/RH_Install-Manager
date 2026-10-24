@@ -1,6 +1,7 @@
-from modules import show_ip, logo_top, clear_the_screen
+from modules import show_ip, logo_top, clear_the_screen, write_json
 import json
 import os
+import subprocess
 from time import sleep
 from pathlib import Path
 
@@ -78,9 +79,15 @@ def conf_check():
 
 
 def save_config_os(ssid, password):
-    os.system(f"scripts/net_hotspot_auto_12.sh {ssid} {password}")
-    print("\n\n\tHotspot configuration data has been saved\n")
-    sleep(3)
+    try:
+        result = subprocess.run(['scripts/net_hotspot_auto_12.sh', ssid, password])
+    except (OSError, ValueError):
+        print("\n\tCould not run hotspot configuration. Check the setup script and input.")
+        return False
+    if result.returncode != 0:
+        print("\n\tHotspot configuration failed (exit status {}). See the error above.".format(result.returncode))
+        return False
+    return True
 
 
 def do_config():
@@ -127,9 +134,17 @@ def do_config():
             else:
                 print("\nPlease enter correct value")
         if selection[0] == 'y':
-            with open(f"{home_dir}/RH_Install-Manager/ap-config.json", "w") as json_file:
-                json.dump(ap_config, json_file, indent=4)
-            save_config_os(ssid, password)
+            if not save_config_os(ssid, password):
+                input("\n\tHit 'Enter' to exit this screen ")
+                return 0
+            try:
+                write_json(ap_config, f"{home_dir}/RH_Install-Manager/ap-config.json")
+            except OSError:
+                print("\n\tHotspot service configured, but ap-config.json could not be saved. Check file permissions and free space.")
+                input("\n\tHit 'Enter' to exit this screen ")
+                return 0
+            print("\n\n\tHotspot configuration data has been saved\n")
+            sleep(3)
             clear_the_screen()
             logo_top(False)
             ethernet_ip, wlan_ip = show_ip()
