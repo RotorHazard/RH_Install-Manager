@@ -8,26 +8,18 @@ def com_init(bus_number):
     Check if I2C interface is enabled with 'sudo raspi-config'
     May try manually install smbus with 'sudo apt install python3-smbus'
     """
-    err_time = 1
-    bus = 0
     try:
-        # noinspection PyUnresolvedReferences
-        from smbus2 import SMBus  # works only on Bookworm
-        bus = SMBus(bus_number)
-    except ModuleNotFoundError as no_mod_err:
-        # noinspection PyUnresolvedReferences
-        from smbus import SMBus  # for legacy OSes
-        bus = SMBus(bus_number)
-    except PermissionError as perm_error:
+        try:
+            # noinspection PyUnresolvedReferences
+            from smbus2 import SMBus
+        except ImportError:
+            # noinspection PyUnresolvedReferences
+            from smbus import SMBus  # for legacy OSes
+        return SMBus(bus_number)
+    except Exception as error:
         print(error_msg)
-        print(perm_error)
-        sleep(err_time)
-    except NameError as name_error:
-        print(error_msg)
-        print(name_error)
-        sleep(err_time)
-    finally:
-        return bus
+        print(error)
+        raise
 
 
 def reset_gpio_pin(gpio_reset_pin):
@@ -44,15 +36,9 @@ def reset_gpio_pin(gpio_reset_pin):
         sleep(0.1)
         GPIO.output(gpio_reset_pin, GPIO.HIGH)
         sleep(0.1)
-    except AttributeError:
-        print("AttributeError - that feature works only on Pi")
-        sleep(1)
-    except NameError:
-        print("NameError - that feature works only on Pi")
-        sleep(1)
-    except ModuleNotFoundError:
-        print("GPIO import - failed - works only on Pi")
-        sleep(1)
+    except Exception as error:
+        print("GPIO reset failed: {}".format(error))
+        raise
 
 
 def prepare_mate_node(addr):
@@ -82,8 +68,11 @@ def prepare_mate_node(addr):
         bus.write_i2c_block_data(addr, reset_mate_node_command, on)
         print("on command sent")
         sleep(0.2)
-    except OSError:
-        print(f"\n{Bcolors.RED}OSError - please check I2C bus number in the config file (or wiring){Bcolors.ENDC}\n")
+    except Exception as error:
+        print(f"\n{Bcolors.RED}I2C reset failed - check bus number and wiring: {error}{Bcolors.ENDC}\n")
+        raise
+    finally:
+        bus.close()
 
 
 def main():

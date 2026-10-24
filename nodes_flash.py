@@ -1,7 +1,7 @@
 import os
 from time import sleep
 from modules import clear_the_screen, Bcolors, logo_top, rhim_load_config
-from nodes_flash_common import com_init, prepare_mate_node, reset_gpio_pin
+from nodes_flash_common import prepare_mate_node, reset_gpio_pin
 
 
 def nodes_addresses():
@@ -85,135 +85,81 @@ def firmware_flash(config, bootloader_version=0, flashing_target="firmware", att
     else:
         firmware_version = "custom_firmware/custom_node.hex"
 
-    if attempt == 0:
-        flashing_error_handler = f"(printf '\n\n{Bcolors.YELLOW}Unsuccessful flashing - trying with another bootloader" \
-                                 f"{Bcolors.ENDC}\n\n' && touch /home/{config.user}/RH_Install-Manager/.flashing_error && sleep 1)"
-    else:
-        flashing_error_handler = f"(printf '\n\n{Bcolors.RED}    " \
-                                 f"!!! ---- Flashing error - both bootloaders - try again ---- !!!  {Bcolors.ENDC}\n\n'" \
-                                 f"&& touch /home/{config.user}/RH_Install-Manager/.unsuccessful_flashing_error && sleep 1)"
+    command = (
+        f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {flashing_baudrate} -U "
+        f"flash:w:/home/{config.user}/RH_Install-Manager/firmware/{bootloader_version}/{firmware_version}:i")
+    print(command)
+    return not config.debug_mode and os.system(command) == 0
 
-    print(f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {str(flashing_baudrate)} -U \n"
-          f"flash:w:/home/{config.user}/RH_Install-Manager/firmware/{bootloader_version}/{firmware_version}:i")
 
-    if not config.debug_mode:
-        os.system(
-            f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {str(flashing_baudrate)} -U "
-            f"flash:w:/home/{config.user}/RH_Install-Manager/firmware/{bootloader_version}/{firmware_version}:i"
-            f"|| {flashing_error_handler}")
+def node_operation(config, selected_node_number, gpio_node=False, firmware_type="firmware",
+                   uart=False, initial_bootloader=0):
+    if config.debug_mode:
+        print("simulation mode - UART unavailable" if uart else "simulation mode - flashing disabled")
+        return False
+    addr = nodes_addresses()[selected_node_number - 1]
+    for attempt in range(2):
+        try:
+            if gpio_node:
+                print(f"Node {selected_node_number} - reset with GPIO pin: {config.gpio_reset_pin}")
+                reset_gpio_pin(config.gpio_reset_pin)
+            else:
+                print(f"Node {selected_node_number} - reset with I2C address: {addr}")
+                prepare_mate_node(addr)
+        except Exception as error:
+            print(f"Node {selected_node_number} - reset failed: {error}")
+            return False
+        bootloader = initial_bootloader if attempt == 0 else 1 - initial_bootloader
+        if uart:
+            success = check_uart_connection(config, bootloader, attempt)
+        else:
+            success = firmware_flash(config, bootloader, firmware_type, attempt)
+        if success:
+            return True
+        if attempt == 0:
+            print("Unsuccessful attempt - trying with another bootloader")
+    return False
 
 
 # below works when nodes are 'auto-numbered' - as when official PCB is used
 def all_nodes_flash(config):
     clear_the_screen()
-    os.system(f"rm /home/{config.user}/RH_Install-Manager/.unsuccessful_flashing_error > /dev/null 2>&1 ")
     print(f"\n\t\t\t{Bcolors.BOLD}Flashing procedure started{Bcolors.BOLD}\n\n")
-    nodes_num = config.nodes_number
-    odd_number = odd_number_of_nodes_check(config)
-    addresses = nodes_addresses()
-    if nodes_num == 1:
-        flash_firmware_onto_a_node(config, 1, True) if odd_number else None
-    else:
-        for i in range(0, nodes_num):
-            addr = addresses[i]
-            print(f"\n\t\t{Bcolors.BOLD}Flashing node {i + 1} {Bcolors.ENDC}(reset with I2C address: {addr})\n")
-            prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - flashing disabled")
-            firmware_flash(config, 0, "firmware", 0)
-            old_bootloader_flashing_error = os.path.exists(f"/home/{config.user}/RH_Install-Manager/.flashing_error")
-            if old_bootloader_flashing_error:
-                print(
-                    f"\n\t\t{Bcolors.BOLD}Flashing node {i + 1} {Bcolors.ENDC}(reset with I2C address: {addr})\n")
-                print("new bootloader")
-                prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - flashing disabled")
-                firmware_flash(config, 1, "firmware", 1)
-                os.system(f"rm /home/{config.user}/RH_Install-Manager/.flashing_error > /dev/null 2>&1 ")
-            print(f"\n\t\t\t{Bcolors.BOLD}Node {i + 1} - flashed{Bcolors.ENDC}\n\n")
-            sleep(2)
-            if odd_number and ((nodes_num - i) == 2):
-                break  # breaks the "flashing loop" after last even node
-        flash_firmware_onto_a_node(config, config.nodes_number, True) if odd_number else None
-    unsuccessful_flashing_error_flag = os.path.exists(
-        f"/home/{config.user}/RH_Install-Manager/.unsuccessful_flashing_error")
-    unsuccessful_update_image() if unsuccessful_flashing_error_flag else successful_update_image(config)
+    success = True
+    for node in range(1, config.nodes_number + 1):
+        gpio_node = odd_number_of_nodes_check(config) and node == config.nodes_number
+        result = node_operation(config, node, gpio_node)
+        print(f"Node {node} - {'flashed' if result else 'not flashed'}")
+        success = result and success
+        sleep(2)
+    unsuccessful_update_image() if not success else successful_update_image(config)
     input("\nDone. Press ENTER to continue ")
     sleep(1)
+    return success
 
 
 def flash_firmware_onto_a_node(config, selected_node_number, gpio_node=False, firmware_type="firmware"):
-    addr = nodes_addresses()[selected_node_number - 1]
-    i2c_flashing_message = f"\n\t\t{Bcolors.BOLD}Flashing node {selected_node_number} " \
-                           f"{Bcolors.ENDC}(reset with I2C address: {addr})\n"
-    gpio_flashing_message = f"\n\t\t{Bcolors.BOLD}Flashing node {config.nodes_number} " \
-                            f"{Bcolors.ENDC}(reset with GPIO pin: {config.gpio_reset_pin})\n"
-    if not gpio_node:
-        print(i2c_flashing_message)
-        prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - flashing disabled")
-    else:
-        print(gpio_flashing_message)
-        reset_gpio_pin(config.gpio_reset_pin) if not config.debug_mode else print("simulation mode - flashing disabled")
-    firmware_flash(config, 0, firmware_type, 0) if not config.debug_mode else None
-    old_bootloader_flashing_error = os.path.exists(f"/home/{config.user}/RH_Install-Manager/.flashing_error")
-    if old_bootloader_flashing_error:
-        if not gpio_node:
-            print(i2c_flashing_message)
-            prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - flashing disabled")
-        else:
-            print(gpio_flashing_message)
-            reset_gpio_pin(config.gpio_reset_pin) if not config.debug_mode else print(
-                "simulation mode - flashing disabled")
-        firmware_flash(config, 1, firmware_type, 1) if not config.debug_mode else None
-        os.system(f"rm /home/{config.user}/RH_Install-Manager/.flashing_error > /dev/null 2>&1 ")
-    print(f"\n\t\t\t{Bcolors.BOLD}Node {selected_node_number} - flashed{Bcolors.ENDC}\n\n")
+    success = node_operation(config, selected_node_number, gpio_node, firmware_type)
+    print(f"Node {selected_node_number} - {'flashed' if success else 'not flashed'}")
     input("\nPress ENTER to continue")
     sleep(2)
+    return success
 
 
 def check_uart_connection(config, bootloader_version=0, attempt=0):
-    if bootloader_version == 0:
-        flashing_baudrate = 57600
-    else:
-        flashing_baudrate = 115200
-
-    if attempt == 0:
-        uart_error_handler = f"(printf '\n\n{Bcolors.YELLOW}Connection unsuccessful  - trying with another baudrate  " \
-                             f"{Bcolors.ENDC}\n\n' && touch /home/{config.user}/RH_Install-Manager/.flashing_error && sleep 1)"
-    else:
-        uart_error_handler = f"printf '\n{Bcolors.RED}    " \
-                             f" ---- UART response error - both baudrates - try again ----   {Bcolors.ENDC}\n\n'"
-
-    print(f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {str(flashing_baudrate)}")
-
-    if not config.debug_mode:
-        os.system(
-            f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {str(flashing_baudrate)} "
-            f"|| {uart_error_handler}")
+    flashing_baudrate = 57600 if bootloader_version == 0 else 115200
+    command = f"timeout 13 avrdude -v -p atmega328p -c arduino -P /dev/{config.port_name} -b {flashing_baudrate}"
+    print(command)
+    return not config.debug_mode and os.system(command) == 0
 
 
-def check_uart_con_with_a_node(config, selected_node_number, gpio_node=False):  # TODO - new bootloader check for uart
-    addr = nodes_addresses()[selected_node_number - 1]
-    gpio_uart_check_message = f"\n\t\t{Bcolors.BOLD}Checking node {config.nodes_number} {Bcolors.ENDC}(reset with GPIO pin: {config.gpio_reset_pin})\n"
-    i2c_uart_check_message = f"\n\t\t{Bcolors.BOLD}Checking node {selected_node_number} {Bcolors.ENDC}(reset with I2C address: {addr})\n"
-    if not gpio_node:
-        print(i2c_uart_check_message)
-        prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - UART unavailable")
-    else:
-        print(gpio_uart_check_message)
-        reset_gpio_pin(config.gpio_reset_pin) if not config.debug_mode else print("simulation mode - UART unavailable")
-    check_uart_connection(config, 0, 0) if not config.debug_mode else None
-    old_bootloader_flashing_error = os.path.exists(f"/home/{config.user}/RH_Install-Manager/.flashing_error")
-    if old_bootloader_flashing_error:
-        if not gpio_node:
-            print(i2c_uart_check_message)
-            prepare_mate_node(addr) if not config.debug_mode else print("simulation mode - UART unavailable")
-        else:
-            print(gpio_uart_check_message)
-            reset_gpio_pin(config.gpio_reset_pin) if not config.debug_mode else print(
-                "simulation mode - UART unavailable")
-        check_uart_connection(config, 1, 1) if not config.debug_mode else None
-        os.system(f"rm /home/{config.user}/RH_Install-Manager/.flashing_error > /dev/null 2>&1 ")
-    print(f"\n\t\t\t{Bcolors.BOLD}Node {selected_node_number} - checked{Bcolors.ENDC}\n\n")
+def check_uart_con_with_a_node(config, selected_node_number, gpio_node=False):
+    success = node_operation(config, selected_node_number, gpio_node, uart=True)
+    print(f"Node {selected_node_number} - {'UART connected' if success else 'UART connection failed'}")
     sleep(1)
     input("\nPress ENTER to continue")
+    return success
+
 
 
 def node_selection_menu(config):
@@ -292,15 +238,15 @@ def first_flashing(config):
     clear_the_screen()
     logo_top(config.debug_mode)
 
+    success = False
+
     def flash_node_first_time(port):
+        attempted = False
+        all_successful = True
         first_attempt = f"timeout 20 avrdude -v -p atmega328p -c arduino -P /dev/{port} -b 57600 -U \
         flash:w:/home/{config.user}/RH_Install-Manager/firmware/old_bootloader/{firmware_version_selection(config)}/node_0.hex:i"
-        first_attempt_error_msg = f'printf "\n\n{Bcolors.YELLOW}Unsuccessful flashing - trying with new bootloader {Bcolors.ENDC}\n\n\n"'
-        ready_to_second_flash_msg = f'printf "{Bcolors.GREEN}{Bcolors.BOLD}Push reset button after seeing some characters below{Bcolors.ENDC}\n\n" '
         second_attempt = f"sleep 2 && timeout 20 avrdude -v -p atmega328p -c arduino -P /dev/{port} -b 115200 -U \
         flash:w:/home/{config.user}/RH_Install-Manager/firmware/new_bootloader/{firmware_version_selection(config)}/node_0.hex:i"
-        second_attempt_error_msg = f'printf "\n\n{Bcolors.RED}Unsuccessful flashing - both bootloaders ' \
-                                   f'{Bcolors.ENDC}\n\n"'
         uart_flashing_prompt = \
             "\n\n\t{bg}Hit 'Enter' and push reset button on next node after a second {e}{br}[e - exit] {e}" \
             "".format(br=Bcolors.RED + Bcolors.BOLD, bg=Bcolors.GREEN + Bcolors.BOLD, e=Bcolors.ENDC)
@@ -315,11 +261,21 @@ def first_flashing(config):
         while True:
             selection = input(flashing_prompt)
             if selection == 'e':
-                break
+                return attempted and all_successful
             else:
                 sleep(0.5)
-                os.system(
-                    f"""{first_attempt} || ({first_attempt_error_msg} && sleep 0.5 && {ready_to_second_flash_msg} && sleep 2 && {second_attempt}) || {second_attempt_error_msg}""")
+                if config.debug_mode:
+                    print("simulation mode - flashing disabled")
+                    continue
+                attempted = True
+                success = os.system(first_attempt) == 0
+                if not success:
+                    print(f"{Bcolors.YELLOW}Unsuccessful flashing - trying with new bootloader{Bcolors.ENDC}")
+                    print("Push reset button after seeing some characters below")
+                    sleep(2)
+                    success = os.system(second_attempt) == 0
+                all_successful = success and all_successful
+                print("Node - flashed" if success else "Node - not flashed, both bootloaders failed")
 
     while True:
         first_flash_select = """
@@ -346,9 +302,9 @@ def first_flashing(config):
 """.format(green=Bcolors.GREEN_S, yellow=Bcolors.YELLOW_S, bold=Bcolors.BOLD, endc=Bcolors.ENDC)
         port_selection = input(first_flash_select)
         if port_selection == '1':
-            flash_node_first_time('ttyAMA0')
+            success = flash_node_first_time('ttyAMA0')
         elif port_selection == '2':
-            flash_node_first_time('ttyS0')
+            success = flash_node_first_time('ttyS0')
         elif port_selection == '3':
             usb_msg = """
     You are about to attempt first time firmware flashing via Pi's USB port.
@@ -358,18 +314,19 @@ def first_flashing(config):
 
             print(usb_msg)
             input("\n\tHit Enter when you will be ready ")
-            flash_node_first_time('ttyUSB0')
+            success = flash_node_first_time('ttyUSB0')
         elif port_selection == '4':
             custom_port_selected = str(input("\n\tEnter custom port name here: "))
-            flash_node_first_time(custom_port_selected)
+            success = flash_node_first_time(custom_port_selected)
         elif port_selection == 'e':
             break
         else:
             print("\n\tType: 'UART' or 'USB'\n\t")
             continue
         break
-    print(f"\n\n\t\t\t{Bcolors.BOLD + Bcolors.UNDERLINE}FIRMWARE FLASHING - DONE{Bcolors.ENDC}\n\n")
+    print("FIRMWARE FLASHING - DONE" if success else "Flashing session ended without all nodes flashed")
     sleep(2)
+    return success
 
 
 def show_i2c_devices(config):
@@ -495,7 +452,6 @@ def firmware_info(config):
 
 def flashing_menu(config):
     while True:
-        os.system(f"rm /home/{config.user}/RH_Install-Manager/.flashing_error > /dev/null 2>&1 ")
         clear_the_screen()
         logo_top(config.debug_mode)
         node_menu = """\n
@@ -538,7 +494,6 @@ def flashing_menu(config):
 
 def main():
     config = rhim_load_config()
-    com_init(config)
     flashing_menu(config)
 
 
