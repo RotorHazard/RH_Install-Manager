@@ -667,6 +667,24 @@ class CoordinatorTests(RuntimeFixture):
         self.effects.markers.assert_called_once()
         self.assertTrue(self.marker_data["fresh_install_pending"])
 
+    def test_part1_wait_message_precedes_first_long_operation(self):
+        self.fresh()
+        self.venv = False
+        self.prefix = self.base_prefix
+        self.executable = "/usr/bin/python3"
+        install = self.coordinator("installation")
+        seen = []
+
+        def system(command):
+            if "/install_rh_part_1.sh" in command:
+                seen.append(self.output.getvalue())
+            return 0
+
+        self.effects.system.side_effect = system
+        self.assertTrue(install(False, self.config, "", 1))
+        self.assertEqual(len(seen), 1)
+        self.assertIn("may take several minutes", seen[0])
+
     def test_fresh_part1_then_failed_part2_can_be_retried(self):
         self.fresh()
         self.venv = False

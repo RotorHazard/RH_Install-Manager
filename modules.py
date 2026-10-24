@@ -36,12 +36,10 @@ def get_host_info():
         ip_addresses = subprocess.check_output(['hostname', '-I']).decode('utf-8').strip().split()
         for ip in ip_addresses:
             ip_list.append(ip) if len(ip) < 16 else None
-        for i in range(3):
-            ip_list.append("0")  # so at least ip_list have at least 3 arguments - due to return function
-
     except Exception as e:
         hostname = "no hostname info"
 
+    ip_list.extend(["0"] * 3)
     return hostname, ip_list
 
 
@@ -102,10 +100,10 @@ def check_if_string_is_in_file(file_name, string_to_search):
 
 
 def logo_top(linux_testing):
-    hostname = str(get_host_info()[0])
-    ip1 = str("IP: " + get_host_info()[1][0]) if get_host_info()[1][0] != "0" else "IP: no IP info"
-    ip2 = str("IP: " + get_host_info()[1][1]) if get_host_info()[1][1] != "0" else ""
-    ip3 = str("IP: " + get_host_info()[1][2]) if get_host_info()[1][2] != "0" else ""
+    hostname, ip_list = get_host_info()
+    ip1 = "IP: " + ip_list[0] if ip_list[0] != "0" else "IP: no IP info"
+    ip2 = "IP: " + ip_list[1] if ip_list[1] != "0" else ""
+    ip3 = "IP: " + ip_list[2] if ip_list[2] != "0" else ""
     debug_status = f"{Bcolors.PROMPT}Debug 'PC' version - sim mode{Bcolors.ENDC}" if linux_testing else 29 * ' '
     print("""
 
