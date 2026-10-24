@@ -25,8 +25,14 @@ only a system PATH and `LC_ALL=C`. No repository shell script is executed.
 Ignored and untracked scripts are excluded. Track new scripts before expecting
 this check to include them.
 
-CI runs on Ubuntu and macOS with Python 3.10. This test requirement does not
-change RHIM's declared Python 3.6 runtime compatibility. These checks do not
+CI runs the full suite on Ubuntu and macOS with Python 3.10. A Linux-only
+Docker step runs `python36_smoke.py` in the digest-pinned official
+`python:3.6.15-slim-buster` image, with networking disabled and the checkout
+mounted read-only. It compiles runtime files and executes the config-save and
+banner fixtures on CPython 3.6. It does not install application dependencies
+or run application startup. The archived image is only a compatibility check.
+These test environments do not change RHIM's declared Python 3.6 runtime
+compatibility. These checks do not
 verify installation, updates, services, networking, firmware flashing or
 Raspberry Pi hardware. CI does not deploy anything.
 
@@ -126,6 +132,28 @@ operation runs on macOS. No claim of Linux/Pi installation proof follows from
 this suite. See [source/data policy](../docs/source-data-safety.md) for copy and
 recovery limits. Production helpers retain Python 3.6 syntax/API choices;
 the unittest/CI environment still requires Python 3.10+.
+
+## Operation regression coverage
+
+`test_config_writes.py` checks real atomic config saves, serialization and
+storage failures, failed replacement and retry, formatting, permissions and
+symlink targets. `test_banner.py` checks one host query per banner and safe
+output when address lookup fails. Coordinator coverage checks that the wait
+message precedes the first installation script.
+
+`test_hotspot_configuration.py` passes credentials to a harmless argument
+recorder, then executes the setup script with an allow-listed `sudo` replacement.
+The replacement maps every permitted output path into a temporary directory.
+Generated hotspot scripts run with fake Wi-Fi detection and `nmcli` functions.
+Tests cover spaces and shell metacharacters at both boundaries, setup failures,
+and saving `ap-config.json` only after setup succeeds. They do not prove actual
+NetworkManager or systemd behavior, or rollback after partial system changes.
+
+`test_nodes_flashing.py` loads production functions without hardware imports.
+Mocked bus libraries, GPIO and command results cover initialization and reset
+failures, bootloader retries, UART checks and single/series success reporting.
+These tests do not open an I2C bus or serial port, reset a physical node or
+execute `avrdude`.
 
 ## Recorded system verification
 
