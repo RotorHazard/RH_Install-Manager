@@ -5,6 +5,9 @@
         UPDATE NOTES:
         ^^^^^^^^^^^^
 
+7a5.451.36
+1. RotorHazard 4.5.1 (stable) release installation and update support added.
+
 7a3.450.36
 1. Safer manager self-updates with backups and preserved settings.
 2. Fixed configuration loss when saving fails.
